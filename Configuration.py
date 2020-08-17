@@ -24,7 +24,24 @@ except:
 geometries={'sphere':GeometrySphere,'plane':GeometryPlane,'plane_periodic':GeometryPeriodicPlane,'none':Geometry,'tube':GeometryTube,'peanut':GeometryPeanut,'hourglass':GeometryHourglass}
 
 class Configuration:
-	def __init__(self,parampath,datapath,multiopt,debug=False):
+	# We need a completely generic constructor since we will have to make sub-classes as well
+	# as well as some with fresh positions in python from other code
+	def __init__(self,**kwargs):
+		print ' kwargs: ', kwargs
+		self.initype = kwargs["initype"]
+		if self.initype == "fromCSV":
+			self.fromCSV(kwargs["parampath"],kwargs["datapath"],kwargs["multiopt"])
+		elif self.initype == "makeChild":
+			self.makeChild(kwargs["parentconf"],kwargs["frame"],kwargs["usetype"])
+		elif self.initype == "fromPython":
+			self.fromPython(kwargs["param"],kwargs["rval"],kwargs["vval"],kwargs["nval"],kwargs["radii"],kwargs["ptype"],kwargs["flag"])
+		else:
+			print("Configuration:Unknown configuration constructor option, stopping!")
+			break
+			
+			
+	# Use methods for the actual initialisation
+	def fromCSV(self,parampath,datapath,multiopt,debug=False):
 		self.debug = debug
 		self.param = Param(parampath)
 		self.datapath = datapath
@@ -40,6 +57,63 @@ class Configuration:
 		# Create the right geometry environment:
 		self.geom=geometries[param.constraint](param)
 		print self.geom
+		
+	# Create configuration from some python data passed down to here
+	def fromPython(self,param,rval,vval,nval,radius,ptype,flag):
+		self.debug = False
+		self.param = param
+		self.multiopt = "single"
+		self.usetype = "all"
+		
+		self.rval = rval
+		self.vval = vval
+		self.nval = nval
+		self.radius = radius
+		self.ptype = ptype
+		self.flag = flag
+		
+		self.N = len(radius)
+		self.sigma = np.mean(radius)
+		
+		self.inter=Interaction(self.param,False,self.radius,False)
+		self.geom=geometries[param.constraint](param)
+		
+		
+				
+	# Glorified copy constructor to isolate one frame and a subset of particles. Will serve as input to Hessian or Tesselation
+	def makeChild(self,parentconf,frame=1,usetype='all'):
+		self.debug = parentconf.debug
+		self.param = parentconf.param
+		# Single frame for the child
+		self.multiopt = "single"
+		# And we have already narrowed down to the types we are looking for
+		self.usetype = "all"
+		self.sigma = parentconf.sigma
+		
+		if parentconf.multiopt=="single":
+			useparts = parentconf.getUseparts(usetype)
+			self.N = len(useparts)
+			self.rval = parentconf.rval[useparts,:]
+			self.vval = parentconf.vval[useparts,:]
+			self.nval = parentconf.nval[useparts,:]
+			self.radius = parentconf.radius[useparts]
+			self.ptype = parentconf.ptype[useparts]
+			self.flag = parentconf.flag[useparts]
+		else:
+			useparts = parentconf.getUseparts(usetype,frame)
+			self.N = len(useparts)
+			self.rval = parentconf.rval[frame,useparts,:]
+			self.vval = parentconf.vval[frame,useparts,:]
+			self.nval = parentconf.nval[frame,useparts,:]
+			self.radius = parentconf.radius[frame,useparts]
+			self.ptype = parentconf.ptype[frame,useparts]
+			self.flag = parentconf.flag[frame,useparts]
+			
+		# is that passing a pointer? Or should I make some new ones instead?
+		#self.inter=Interaction(self.param,monodisperse,self.radius,self.ignore)
+		#self.geom=geometries[param.constraint](param)
+		self.inter = parentconf.inter
+		self.geom = parentconf.geom
 		
 		
 	def readDataSingle(self,filename,internal=False,readtypes='all'):
@@ -336,7 +410,7 @@ class Configuration:
 		neighbours.remove(i)
 		#print "Contact neighbours: " + str(len(neighbours))
 		#print neighbours
-		if self.multiopt--"single":
+		if self.multiopt=="single":
 			drvec=self.geom.ApplyPeriodic2d(self.rval[neighbours,:]-self.rval[i,:])
 		else:
 			drvec=self.geom.ApplyPeriodic2d(self.rval[frame,neighbours,:]-self.rval[frame,i,:])
@@ -381,6 +455,9 @@ class Configuration:
 		energytot=np.sum(eng)
 		zav=np.mean(ncon)
 		return vel2av, phival,ndensity, pressure,fmoment,energy,energytot,zav
+	
+	
+			
 	
 	
 ####################### Fourier space and real space equal time correlation functions ##################################
@@ -497,6 +574,14 @@ class Configuration:
 				for ky in range(nq):
 					fourierval[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1]))*self.vval[useparts,0])/N
 					fourierval[kx,ky,1]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1]))*self.vval[useparts,1])/N 
+		else:
+			useparts = getUseparts(self,usetype,whichframe)
+			N = len(useparts)
+			print(N)
+			for kx in range(nq):
+				for ky in range(nq):
+					fourierval[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.rval[whichframe,useparts,0]+qy[ky]*self.rval[whichframe,useparts,1]))*self.vval[whichframe,useparts,0])/N
+					fourierval[kx,ky,1]=np.sum(np.exp(1j*(qx[kx]*self.rval[whichframe,useparts,0]+qy[ky]*self.rval[whichframe,useparts,1]))*self.vval[whichframe,useparts,1])/N 
 			
 		# Sq = \vec{v_q}.\vec{v_-q}, assuming real and symmetric
 		# = \vec{v_q}.\vec{v_q*} = v
@@ -530,8 +615,10 @@ class Configuration:
 			#plt.colorbar()
 			#plt.title('Velocities - y')
 		return qrad,valrad,Sqrad
-############# Till here 11.08.20 ##############	  
-	def getVelcorrSingle(self,whichframe,dx,xmax,verbose=True):
+	
+	# Real space velocity correlation function
+	# Note that this can work in higher dimensions. Uses geodesic distance, i.e. on the sphere if necessary
+	def getVelcorrSingle(self,dx,xmax,whichframe=1,usetype='all',verbose=True):
 		# start with the isotropic one - since there is no obvious polar region
 		# and n is not the relevant variable, and v varies too much
 		print "Velocity correlation function for frame " + str(whichframe)
@@ -539,15 +626,32 @@ class Configuration:
 		bins=np.linspace(0,xmax,npts)
 		velcorr=np.zeros((npts,))
 		velcount=np.zeros((npts,))
-		velav=np.sum(self.vval[whichframe,:,:],axis=0)/self.N
-		for k in range(self.N):
-			vdot=np.sum(self.vval[whichframe,k,:]*self.vval[whichframe,:,:],axis=1)
-			dr=self.geom.GeodesicDistance12(self.rval[whichframe,k,:],self.rval[whichframe,:,:])
-			drbin=(np.round(dr/dx)).astype(int)
-			for l in range(npts):
-				pts=np.nonzero(drbin==l)[0]
-				velcorr[l]+=sum(vdot[pts])
-				velcount[l]+=len(pts)
+		
+		if self.multiopt=="single":
+			useparts = getUseparts(self,usetype)
+			N = len(useparts)
+			velav=np.sum(self.vval[useparts,:],axis=0)/N
+			for k in range(N):
+				vdot=np.sum(self.vval[useparts[k],:]*self.vval[useparts,:],axis=1)
+				dr=self.geom.GeodesicDistance12(self.rval[useparts[k],:],self.rval[useparts,:])
+				drbin=(np.round(dr/dx)).astype(int)
+				for l in range(npts):
+					pts=np.nonzero(drbin==l)[0]
+					velcorr[l]+=sum(vdot[pts])
+					velcount[l]+=len(pts)
+		else:
+			useparts = getUseparts(self,usetype,whichframe)
+			N = len(useparts)
+			velav=np.sum(self.vval[whichframe,useparts,:],axis=0)/N
+			for k in range(N):
+				vdot=np.sum(self.vval[whichframe,useparts[k],:]*self.vval[whichframe,useparts,:],axis=1)
+				dr=self.geom.GeodesicDistance12(self.rval[whichframe,useparts[k],:],self.rval[whichframe,useparts,:])
+				drbin=(np.round(dr/dx)).astype(int)
+				for l in range(npts):
+					pts=np.nonzero(drbin==l)[0]
+					velcorr[l]+=sum(vdot[pts])
+					velcount[l]+=len(pts)
+				
 		isdata=[index for index, value in enumerate(velcount) if value>0]
 		velcorr[isdata]=velcorr[isdata]/velcount[isdata] - np.sum(velav*velav)
 		if verbose:

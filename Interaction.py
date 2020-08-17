@@ -27,10 +27,9 @@ import numpy as np
 # radii (and positions)? Alternatively, pass it just the unchanging particle labels
 class Interaction:
 
-	def __init__(self,param,radius,ignore=False,debug=False):
+	def __init__(self,param,sigma,ignore=False,debug=False):
 		self.param=param
-		self.radius=radius
-		self.sigma= np.mean(self.radius)
+		self.sigma= sigma
 		self.ignore=ignore
 		self.debug=debug
 		# First step: unpack parameters to find out what kind of types we have, and what kind of potentials
@@ -54,12 +53,12 @@ class Interaction:
 			elif self.param.potential=='gaussian':
 				# give it at least a default neighbour radius ...
 				self.dmax=2*self.sigma
-				print "Warning! Gaussian interaction has not yet been implemented!" 
+				print("Warning! Gaussian interaction has not yet been implemented!") 
 			elif self.param.potential=='rod':
 				# CHANGE: Assuming here rods are at default aspect ratio 5
 				self.dmax=10*self.sigma
 				self.mult=1.0
-				print "Warning! Rod interaction has not yet been implemented!"
+				print("Warning! Rod interaction has not yet been implemented!")
 			else:
 				# give it at least a default neighbour radius ...
 				self.dmax=2*self.sigma
@@ -69,7 +68,7 @@ class Interaction:
 			# give it at least a default neighbour radius ...
 			self.dmax=2*self.sigma
 			self.mult=1.0
-			print "Warning! Multiple types of particles interacting have not yet been implemented!"
+			print("Warning! Multiple types of particles interacting have not yet been implemented! Defaulting to monodisperse ofr radius 1")
 		
 	def getDmax(self):
 		return self.dmax
@@ -78,16 +77,17 @@ class Interaction:
 		return self.mult
 		
 	# also is -gradient potential	
-	def getForce(self,i,neighbours,drvec,dr):
-                Fvec=0.0*(np.array(neighbours).transpose()*(drvec).transpose()).transpose()
+	def getForce(self,i,neighbours,drvec,radi,radj):
+		Fvec=0.0*(np.array(neighbours).transpose()*(drvec).transpose()).transpose()
+		dr=np.sqrt(drvec[:,0]**2+drvec[:,1]**2+drvec[:,2]**2)
 		if ((self.param.ntypes==1) or (self.ignore==True)):
 			if self.param.potential=='soft':	
-				diff=self.radius[i]+self.radius[neighbours]-dr
+				diff=radi+radj-dr
 				fact = 0.5*self.k*diff
 				Fvec=self.k*((diff/dr).transpose()*(drvec).transpose()).transpose()
 				return Fvec
 			elif self.param.potential=='soft_attractive':
-				scale=self.radius[i]+self.radius[neighbours]
+				scale=radi+radj
 				diff=scale-dr
 				dscaled=diff/scale
 				rep = [index for index, value in enumerate(dscaled) if value > -self.fact]
@@ -106,24 +106,24 @@ class Interaction:
 				Fvec=((fnorm/dr).transpose()*(drvec).transpose()).transpose()
 				return Fvec
 			elif self.param.potential=='gaussian':
-				print "Warning! Gaussian interaction has not yet been implemented! Returning zero force"
+				print("Warning! Gaussian interaction has not yet been implemented! Returning zero force")
 				return Fvec
 			elif self.param.potential=='rod':
-				print "Warning! Rod interaction has not yet been implemented! Returning zero force"
+				print("Warning! Rod interaction has not yet been implemented! Returning zero force")
 				return Fvec
 			else:
-				#print "Warning! Unknown interaction type! Returning zero force"
+				print("Warning! Unknown interaction type! Returning zero force")
 				return Fvec
 		else:
 			# Do the Morse right now only ... will serve as a template
-			print "Warning! Multiple types of particles interacting have not yet been implemented! Returning zero force"
+			print("Warning! Multiple types of particles interacting have not yet been implemented! Returning zero force")
 			return Fvec
 				
-	def getStresses(self,i,neighbours,drvec,dr):
+	def getStresses(self,i,neighbours,drvec,radi,radj):
 		# Do these all the standard way, including the pressure as trace of the matrix
 		stress=np.zeros((len(neighbours),3,3))
 		# First get the forces:
-		Fvec=self.getForce(i,neighbours,drvec,dr)
+		Fvec=self.getForce(i,neighbours,drvec,radi,radj)
 		for u in range(3):
 			for v in range(3):
 				stress[:,u,v]+=0.5*drvec[:,u]*Fvec[:,v]
@@ -131,16 +131,17 @@ class Interaction:
 		press=np.trace(stress,axis1=1,axis2=2)
 		return press,stress
 	  
-	def getEnergy(self,i,neighbours,drvec,dr):
+	def getEnergy(self,i,neighbours,drvec,radi,radj):
 		# Note: There is a 0.5 before the energy return statements because as written, every contact is counted twice in the calculation
+		dr=np.sqrt(drvec[:,0]**2+drvec[:,1]**2+drvec[:,2]**2)
 		if ((self.param.ntypes==1) or (self.ignore==True)):
 			if self.param.potential=='soft':	
-				diff=self.radius[i]+self.radius[neighbours]-dr
+				diff=radi+radj-dr
 				fact = 0.5*self.k*diff
 				eng_val = fact*diff
 				return 0.5*eng_val
 			elif self.param.potential=='soft_attractive':
-				scale=self.radius[i]+self.radius[neighbours]
+				scale=radi+radj
 				diff=scale-dr
 				dscaled=diff/scale
 				rep = [index for index, value in enumerate(dscaled) if value > -self.fact]
@@ -161,25 +162,26 @@ class Interaction:
 				eng_val=self.D*(1-np.exp(-self.a*(dr-self.re)))**2
 				return 0.5*eng_val
 			elif self.param.potential=='gaussian':
-				print "Warning! Gaussian interaction has not yet been implemented! Returning zero energy"
+				print("Warning! Gaussian interaction has not yet been implemented! Returning zero energy")
 				return 0
 			elif self.param.potential=='rod':
-				print "Warning! Rod interaction has not yet been implemented! Returning zero energy"
+				print("Warning! Rod interaction has not yet been implemented! Returning zero energy")
 				return 0
 			else:
 				#print "Warning! Unknown interaction type! Returning zero energy"
 				return 0
 		else:
 			# Do the Morse right now only ... will serve as a template
-			print "Warning! Multiple types of particles interacting have not yet been implemented! Returning zero energy"
+			print("Warning! Multiple types of particles interacting have not yet been implemented! Returning zero energy")
 			return 0
 	  
-	def getStiffness(self,i,neighbours,drvec,dr):
+	def getStiffness(self,i,neighbours,drvec,radi,radj):
+		dr=np.sqrt(drvec[:,0]**2+drvec[:,1]**2+drvec[:,2]**2)
 		if ((self.param.ntypes==1) or (self.ignore==True)):
 			if self.param.potential=='soft':
 				return self.k*np.ones((len(neighbours),))
 			elif self.param.potential=='soft_attractive':
-				scale=self.radius[i]+self.radius[neighbours]
+				scale=radi+radj
 				diff=scale-dr
 				dscaled=diff/scale
 				rep = [index for index, value in enumerate(dscaled) if value > -self.fact]
@@ -192,14 +194,14 @@ class Interaction:
 				stiff=2.0*self.a**2*self.D*np.exp(-self.a*(dr-self.re))*(2.0*np.exp(-self.a*(dr-self.re))-1)
 				return stiff
 			elif self.param.potential=='gaussian':
-				print "Warning! Gaussian interaction has not yet been implemented! Returning zero stiffness"
+				print("Warning! Gaussian interaction has not yet been implemented! Returning zero stiffness")
 				return np.zeros((len(neighbours),))
 			elif self.param.potential=='rod':
-				print "Warning! Rod interaction has not yet been implemented! Returning zero stiffness"
+				print("Warning! Rod interaction has not yet been implemented! Returning zero stiffness")
 				return np.zeros((len(neighbours),))
 			else:
 				#print "Warning! Unknown interaction type! Returning zero stiffness"
 				return np.zeros((len(neighbours),))
 		else:
 			# Do the Morse right now only ... will serve as a template
-			print "Warning! Multiple types of particles interacting have not yet been implemented! Returning zero stiffness"
+			print("Warning! Multiple types of particles interacting have not yet been implemented! Returning zero stiffness")

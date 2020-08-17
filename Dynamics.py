@@ -99,6 +99,7 @@ class Dynamics(Configuration):
 		vdist/=self.Nsnap
 		vdist2/=self.Nsnap
 		return vav, vdist,vdist2		
+	
 		
 ####################################### Glassy Physics ###############################################################
 	def getMSD(self,usetype='all',takeDrift,verbose=True):
