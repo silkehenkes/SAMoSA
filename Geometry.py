@@ -31,7 +31,7 @@ class Geometry(object):
 		self.Lx=box[0]
 		self.Ly=box[1]
 		self.Lz=box[2]
-		print "Geometry: Created new geometry " + manifold + " for which periodic = " + str(self.periodic) + " and with box size " + str(self.Lx) + " x " +str(self.Ly) + " x " + str(self.Lz)
+		print("Geometry: Created new geometry " + manifold + " for which periodic = " + str(self.periodic) + " and with box size " + str(self.Lx) + " x " +str(self.Ly) + " x " + str(self.Lz))
 		
 	def RotateMatrixVectorial(self,axis,theta):
 		axlen=np.sqrt(axis[:,0]**2+axis[:,1]**2+axis[:,2]**2)
@@ -145,7 +145,7 @@ class GeometrySphere(Geometry):
 		self.R=param.r
 		self.periodic=False
 		self.area=4.0*np.pi*self.R**2
-		print "GeometrySphere: Created new geometry sphere with radius " + str(self.R)
+		print("GeometrySphere: Created new geometry sphere with radius " + str(self.R))
 		super(GeometrySphere,self).__init__('sphere',param.box,self.periodic,self.area)
 		
 	# Fully vectorial version of parallel transport
@@ -236,7 +236,7 @@ class GeometryPlane(Geometry):
 		self.Ly=param.ly
 		self.periodic=False
 		self.area=self.Lx*self.Ly
-		print "GeometryPlane: Created new geometry plane with Lx = " + str(self.Lx) + " and Ly = " +str(self.Ly)
+		print("GeometryPlane: Created new geometry plane with Lx = " + str(self.Lx) + " and Ly = " +str(self.Ly))
 		super(GeometryPlane,self).__init__('plane',param.box,self.periodic,self.area)
 		
 		
@@ -275,7 +275,7 @@ class GeometryPeriodicPlane(Geometry):
 		self.Ly=param.ly
 		self.periodic=True
 		self.area=self.Lx*self.Ly
-		print "GeometryPeriodicPlane: Created new geometry periodic plane with Lx = " + str(self.Lx) + " and Ly = " +str(self.Ly)
+		print("GeometryPeriodicPlane: Created new geometry periodic plane with Lx = " + str(self.Lx) + " and Ly = " +str(self.Ly))
 		super(GeometryPeriodicPlane,self).__init__('plane',param.box,self.periodic,self.area)
 		
 		
@@ -315,7 +315,7 @@ class GeometryTube(Geometry):
 			self.A=param.const_params['A']
 		except KeyError:
 			self.A = 0
-		print "GeometryTube: Created new geometry tube with radius = " + str(self.R) + " and oscillation amplitude " + str(self.A)
+		print("GeometryTube: Created new geometry tube with radius = " + str(self.R) + " and oscillation amplitude " + str(self.A))
 		
 		
 		
@@ -325,7 +325,7 @@ class GeometryPeanut(Geometry):
 		super(GeometryPeanut,self).__init__('peanut',param.box,self.periodic)
 		self.a=param.const_params['a']
 		self.b=param.const_params['b']
-		print "GeometryPeanut: Created new geometry peanut with parameters a = " + str(self.a) + " and b = " + str(self.b)
+		print("GeometryPeanut: Created new geometry peanut with parameters a = " + str(self.a) + " and b = " + str(self.b))
 		# Determine the Euler angles, essentially. Find theta and phi for each particle,
 		
 	def TangentBundle(self,rval):
@@ -380,7 +380,7 @@ class GeometryHourglass(Geometry):
 		self.A=param.const_params['A']
 		self.H=param.box[2]
 		self.n=1 # number of nodes - 1 for now
-		print "GeometryHourglass: Created new geometry Hourglass with radius = " + str(self.R) + " and amplitude " +str(self.A)
+		print("GeometryHourglass: Created new geometry Hourglass with radius = " + str(self.R) + " and amplitude " +str(self.A))
 		super(GeometryHourglass,self).__init__('hourglass',param.box,self.periodic)
 		
 	def TangentBundle(self,rval):
