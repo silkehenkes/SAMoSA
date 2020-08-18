@@ -1,8 +1,5 @@
 
 from Geometry import *
-#from Tesselation import *
-#from Defects import *
-#from Dynamics import *
 from Interaction import *
 
 from read_param import *
@@ -662,61 +659,5 @@ class Configuration:
 			plt.xlabel("r-r'")
 			plt.ylabel('Correlation')
 		return bins,velcorr
-	 
-	 
-	 
-	## this should be in profiles
-	#def getStatsBand(self,debug=False):
-		#ez = np.array([0,0,1])  # lab frame z-axis
-		## The order parameter with v_0 still in it. Normalize in final polish
-		#orderparV=np.sum(vval,axis=0)/len(vval)
-		#orderpar=np.sum(nval,axis=0)/len(nval)
-		#print orderpar
-		#print orderparV
-		#direction = orderpar/np.linalg.norm(orderpar)
-		#directionV = orderparV/np.linalg.norm(orderparV)
-		#axisorth= np.cross(direction,directionV)
-		#axisval=np.linalg.norm(axisorth)
-		#alpha=np.arcsin(axisval)
-		#axisorth=axisorth/axisval
-		#axisnorm=np.cross(ez,directionV)
-		#axisnorm/=np.linalg.norm(axisnorm)
-		
-		#print directionV
-		#print axisorth
-		
-		#vel = np.sqrt(self.vval[:,0]**2 + self.vval[:,1]**2 + self.vval[:,2]**2)
-		#velnorm=((self.vval).transpose()/(vel).transpose()).transpose()
-		
-		#eng, press,stress = self.compute_energy_and_pressure()
-		#print np.shape(stress)
-		## Project the stresses into the e,theta,phi components. The rr component hast to be 0, and the r cross components
-		## belong to the projection. So they are not all that interesting. 
-		## We want the theta theta, theta phi, phi theta ant phi phi components (implicitly testing symmetries ...)
-		## I give up on the notation. Stress is (N,3,3), the axes are (N,3). We want e_i sigma_ij e_j
-		#s_tt=np.sum(axisnorm*np.einsum('kij,j->ki',stress,axisnorm),axis=1)
-		#s_tp=np.sum(axisnorm*np.einsum('kij,j->ki',stress,directionV),axis=1)
-		#s_pt=np.sum(directionV*np.einsum('kij,j->ki',stress,axisnorm),axis=1)
-		#s_pp=np.sum(directionV*np.einsum('kij,j->ki',stress,directionV),axis=1)
-		#print np.shape(s_tt)
-		## Mean density really makes no sense? Determined by the initial conditions in periodic boundary conditions.
-		## I do not wish to set up artificial bins in a translationally invariant system
-		#vel_av=np.mean(vel)
-		#eng_av=np.mean(eng)
-		#press_av=np.mean(press)
-		#s_tt_av=np.mean(s_tt)
-		#s_tp_av=np.mean(s_tp)
-		#s_pt_av=np.mean(s_pt)
-		#s_pp_av=np.mean(s_pp)
-		
-		## Debugging output
-		#if debug==True:
-			#if HAS_MATPLOTLIB:
-				#fig = plt.figure()
-				#ax = fig.add_subplot(111, projection='3d')
-				#ax.scatter(rval[:,0], rval[:,1], rval[:,2], zdir='z', c='b')
-			#else:
-				#print 'Error: Matplotlib does not exist on this machine, cannot plot system'
-			
-		#return [vel_av,eng_av,press_av,s_tt_av,s_tp_av,s_pt_av,s_pp_av,alpha,direction,directionV,orderpar,orderparV]
+
 	
