@@ -3,40 +3,6 @@
 from Configuration import *
 from numpy import linalg as LA
 
-#try:
-	#import matplotlib.pyplot as plt
-	#from mpl_toolkits.mplot3d import Axes3D
-	#from matplotlib.colors import LinearSegmentedColormap
-	#matplotlib.rcParams['text.usetex'] = 'false'
-	#matplotlib.rcParams['lines.linewidth'] = 2
-	#matplotlib.rcParams['axes.linewidth'] = 2
-	#matplotlib.rcParams['xtick.major.size'] = 8
-	#matplotlib.rcParams['ytick.major.size'] = 8
-	#matplotlib.rcParams['font.size']=16.0
-	#matplotlib.rcParams['legend.fontsize']=14.0
-
-	#cdict = {'red':   [(0.0,  0.0, 0.5),
-					  #(0.35,  1.0, 0.75),
-					  #(0.45,  0.75, 0.0),
-					  #(1.0,  0.0, 0.0)],
-
-			#'green': [(0.0,  0.0, 0.0),
-					  #(0.35,  0.0, 0.5),
-					  #(0.5, 1.0, 1.0),
-					  #(0.8,  0.5, 0.0),
-					  #(1.0,  0.0, 0.0)],
-
-			#'blue':  [(0.0,  0.0, 0.0),
-					  #(0.5,  0.0, 0.0),
-					  #(0.7, 0.5, 1.0),
-					  #(1.0,  0.25, 0.0)]}
-	#HAS_MATPLOTLIB=True
-#except:
-	#HAS_MATPLOTLIB=False
-	#pass
-
-
-
 class Hessian:
     # passing conf here to construct matrix
     # Make sure that this already contains only the particles that one wants
