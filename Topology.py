@@ -21,7 +21,7 @@ class Topology(Configuration):
 	def validate_initialise():
 		if not self.multiopt == "many":
 			print("Topology:: Error: Cannot run full topology without reading in multiple files! Use manual Configuration / Tesselation / Defect for a single file instead.")
-			break
+			sys.exit()
 		# Some booleans to avoid redoing the whole shebang twice as some computations depend on others
 		hasWriter = False
 		# Is there a current child configuration?
@@ -55,7 +55,7 @@ class Topology(Configuration):
 		
 		if debug:
 			plt.figure(figsize=(8,8))
-			velangle = np.arctan2(flow_field[:,1],flow_field[:,0])
+			velangle = np.arctan2(flowField[:,1],flowField[:,0])
 			#arctan2 gives results between -pi to pi, normalise ...
 			colors = (velangle+np.pi)/(2*np.pi)
 			colormap = cm.hsv
@@ -86,12 +86,12 @@ class Topology(Configuration):
 		flag0 = self.flag[frame,useparts]
 		
 		# Generate child configuration (not through makeChild because we use flowField as velocities)
-		flowChild = Configuration("initype":"fromPython","param":param0,"rval":rval0,"vval":flowField,"nval":nval0,"radii":radius0,"ptype":ptype0,"flag":flag0)
+		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=flowField,nval=nval0,radii=radius0,ptype=ptype0,flag=flag0)
 		return flowChild
 		
 	def makeFrameChild(self,frame):
 		# first generate the appropriate child configuration for only that frame
-		frameChild = Configuration("initype":"makeChild","frame":frame,usetype,"all")
+		frameChild = Configuration(initype="makeChild",frame=frame,usetype="all")
 		return frameChild
 	
 	
@@ -103,13 +103,13 @@ class Topology(Configuration):
 		
 		# Now generate tesselation and defects
 		tess = Tesselation(child)
-		print "initialized tesselation"
+		print("initialized tesselation")
 		if delaunay:
 			LoopList,Ival,Jval = tess.findLoopDelaunay()
 		else:
 			#findLoop(self,closeHoles=False,zmin=3,mult0=1.0,mult1=MMAX):
 			LoopList,Ival,Jval = tess.findLoop(closeHoles,zmin,mult)
-		print "found loops"
+		print("found loops")
 		df = Defects(tess,child)
 		defects,numdefect=df.getDefects(symtype,field)
 		
@@ -123,7 +123,7 @@ class Topology(Configuration):
 		# This only makes sense on a sphere
 		if not child.geom.manifold =='sphere':
 			print("Topology: Error - attempting to reorient a non-spherical configuration. This makes no sense. Stopping.")
-			break
+			sys.exit()
 	
 		#self.rval=self.conf.rval
 		ez = np.array([0,0,1])  # lab frame z-axis
@@ -175,7 +175,7 @@ class Topology(Configuration):
 				ax.plot([0,0],[0,0],[-child.geom.R,child.geom.R],'o-g')
 				ax.plot([-child.geom.R*axis[0],child.geom.R*axis[0]],[-child.geom.R*axis[1],child.geom.R*axis[1]],[-child.geom.R*axis[2],child.geom.R*axis[2]],'o-k')
 			else:
-				print 'Error: Matplotlib does not exist on this machine, cannot plot system'
+				print('Error: Matplotlib does not exist on this machine, cannot plot system')
 				
 		axis0 = np.empty((childConf.N,3))
 		axis0[:,0] = axis[0]
@@ -212,7 +212,7 @@ class Topology(Configuration):
 				ax.plot([0,0],[0,0],[-child.geom.R,child.geom.R],'o-g')
 				ax.plot([-child.geom.R*axis[0],child.geom.R*axis[0]],[-child.geom.R*axis[1],child.geom.R*axis[1]],[-child.geom.R*axis[2],child.geom.R*axis[2]],'o-k')
 			else:
-				print 'Error: Matplotlib does not exist on this machine, cannot plot system'
+				print('Error: Matplotlib does not exist on this machine, cannot plot system')
 				
 		axis0 = np.empty((childConf.N,3))
 		axis0[:,0] = axis[0]
@@ -292,7 +292,7 @@ class Topology(Configuration):
 				ax = fig.add_subplot(111, projection='3d')
 				ax.scatter(child.rval[:,0], child.rval[:,1], child.rval[:,2], zdir='z', c='b')
 			else:
-				print 'Error: Matplotlib does not exist on this machine, cannot plot system'
+				print('Error: Matplotlib does not exist on this machine, cannot plot system')
 			
 		return [theta_out,rho_profile,vel_profile,eng_profile,press_profile,s_tt_profile,s_tp_profile,s_pt_profile,s_pp_profile,alpha_profile]
         

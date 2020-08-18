@@ -98,7 +98,7 @@ class Defects:
 				else:
 					self.defects_v.append(defbit)
 					self.numdefect_v+=1
-                if field == 'orientation':
+				if field == 'orientation':
 					print('Number of orientation field defects: ' + str(self.numdefect_n))
 					print('Total charge of orientation field defects: ' + str(char_n))
 					return self.defects_n, self.numdefect_n
@@ -117,7 +117,7 @@ class Defects:
 		#print "Starting loop " + str(thisLoop) + " in region " + str(self.conf.rval[t0,:])
 		thetadum=[]
 		for t in thisLoop[0:len(thisLoop)]:
-			if self.parallelTransport = False:
+			if self.parallelTransport == False:
 				# This is the old version based on small loops
 				if field == 'orientation':
 					ctheta=np.dot(self.conf.nval[t,:],self.conf.nval[t0,:])
@@ -181,7 +181,7 @@ class Defects:
 		
 		# except at the poles: that stuff is garbage
 		# remove, but ONLY if the algorithm was parallel transport (<-- found you, cornea analysis bug ...)
-		if self.parallelTransport
+		if self.parallelTransport:
 			if self.conf.geom.manifold == 'sphere':
 				if abs(charge)>0.4:
 					if self.theta[t]<self.THETAMIN:
@@ -239,7 +239,7 @@ class Defects:
 		if HAS_MATPLOTLIB:
 			fig = plt.figure()
 			ax = fig.add_subplot(111, projection='3d')
-			print self.defects_n
+			print(self.defects_n)
 			ax.scatter(self.conf.rval[:,0], self.conf.rval[:,1], self.conf.rval[:,2], zdir='z', c='b',s=4)
 			ax.scatter(self.defects_n[:][1], self.defects_n[:][2], self.defects_n[:][3], zdir='z', c='r',s=50)
 			ax.scatter(self.defects_v[:][1], self.defects_v[:][2], self.defects_v[:][3], zdir='z', c='g',s=50)

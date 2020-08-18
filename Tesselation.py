@@ -13,7 +13,7 @@ class Tesselation:
 		# First check for suitable data format of configuration
 		if conf.multiopt == "many":
 			print("Tesselation: Error - Can only construct a Tesselation with a single set of input coordinates. Construct single-position configuration instead.")
-			break
+			sys.exit()
 		self.conf=conf
 		self.rval=self.conf.rval
 		self.geom=self.conf.geom
@@ -217,7 +217,7 @@ class Tesselation:
 		for i in range(len(self.rval)):
 			neighbours=[]
 			if i%1000==0:
-				print i
+				print(i)
 			if closeHoles:
 				mult=mult0
 				while len(neighbours)<zmin and mult<mult1:
@@ -254,7 +254,7 @@ class Tesselation:
 				count+=len(neighbours)
 				#print neighbours
 				if i%1000==0:
-					print neighbours
+					print(neighbours)
 		# Identify loops based on the neighbour list. Kick out any (one-way) contacts that have occured so far
 		Jarray=np.array(self.Jval)
 		self.LoopList=[]
@@ -400,7 +400,7 @@ class Tesselation:
 			self.ParList[i]=parray[lorder] 
 			# Use the new ParList structure where loops belong to particles are stored
 		self.ordered_patches = True
-                return self.LoopList,self.LoopCen,self.ParList,self.Ival,self.Jval
+		return self.LoopList,self.LoopCen,self.ParList,self.Ival,self.Jval
 
 	# Tile areas
 	def ComputePatchArea(self):

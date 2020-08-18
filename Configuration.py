@@ -6,7 +6,7 @@ from read_param import *
 from read_data import *
 from CellList import *
 
-import sys
+import sys,glob
 
 
 try:
@@ -24,7 +24,7 @@ class Configuration:
 	# We need a completely generic constructor since we will have to make sub-classes as well
 	# as well as some with fresh positions in python from other code
 	def __init__(self,**kwargs):
-		print ' kwargs: ', kwargs
+		print(' kwargs: ', kwargs)
 		self.initype = kwargs["initype"]
 		if self.initype == "fromCSV":
 			self.fromCSV(kwargs["parampath"],kwargs["datapath"],kwargs["multiopt"])
@@ -34,26 +34,27 @@ class Configuration:
 			self.fromPython(kwargs["param"],kwargs["rval"],kwargs["vval"],kwargs["nval"],kwargs["radii"],kwargs["ptype"],kwargs["flag"])
 		else:
 			print("Configuration:Unknown configuration constructor option, stopping!")
-			break
+			sys.exit()
 			
 			
 	# Use methods for the actual initialisation
-	def fromCSV(self,parampath,datapath,multiopt,debug=False):
+	def fromCSV(self,parampath,datapath,multiopt,ignore=True,debug=False):
 		self.debug = debug
 		self.param = Param(parampath)
 		self.datapath = datapath
 		self.multiopt = multiopt
+		self.ignore = ignore
 		# Options for running mode the analysis
 		if self.multiopt == "single":
 			print("Configuring to read single files")
 		elif self.multiopt == "many":
-			print("Configuring to work on many files (glassy dynamics)")
+			print("Configuring to work on many files")
 		else:
 			print("Unknown file mode configuration option, stoppping!")
-			break
+			sys.exit()
 		# Create the right geometry environment:
-		self.geom=geometries[param.constraint](param)
-		print self.geom
+		self.geom=geometries[self.param.constraint](self.param)
+		print(self.geom)
 		
 	# Create configuration from some python data passed down to here
 	def fromPython(self,param,rval,vval,nval,radius,ptype,flag):
@@ -121,22 +122,23 @@ class Configuration:
 		x, y, z = np.array(data.data[data.keys['x']]), np.array(data.data[data.keys['y']]), np.array(data.data[data.keys['z']])
 		vx, vy, vz = np.array(data.data[data.keys['vx']]), np.array(data.data[data.keys['vy']]), np.array(data.data[data.keys['vz']])
 		
-		if data.keys.has_key('type'):
-			ptype0 = data.data[data.keys['type']]
+		if 'type' in data.keys:
+			ptype0 = np.array(data.data[data.keys['type']])
 			if readtypes == 'all':
 				N = len(x)
 				ptype = ptype0
 			else:
 				useparts=[]
-				for tp in ptype:
+				for tp in ptype0:
 					if tp in readtypes:
-						useparts.append(tp)
+						useparts.append(int(tp))
 				if len(useparts)==0:
 					print('Error: No particles of the correct types in simulation, looking for ' + str(readtypes))
-					break
+					sys.exit()
 				else:
 					N=len(useparts)
-					ptype = ptype0[useparts]
+					hmm = np.array(ptype0)
+					ptype = hmm[useparts]
 		else:
 			if readtypes == 'all':
 				N = len(x)
@@ -144,7 +146,7 @@ class Configuration:
 				useparts = range(N)
 			else:
 				print("Error: looking for data with types " + str(readtypes) + " but data has no type information.")
-				break
+				sys.exit()
 			
 		
 		rval = np.column_stack((x[useparts],y[useparts],z[useparts]))
@@ -160,7 +162,7 @@ class Configuration:
 		# Attempt to read radius, type and flag if present
 		# Set spatial scale sigma for the cell list builder
 		
-		if not data.keys.has_key('radius'): 
+		if not 'radius' in data.keys: 
 			radius = np.ones(N)
 			monodisperse=True
 			sigma = 1.0
@@ -168,9 +170,10 @@ class Configuration:
 			radius0 = np.array(data.data[data.keys['radius']])	
 			radius = radius0[useparts]
 			sigma = np.mean(radius)
+			monodisperse=False
 		
-		if data.keys.has_key('flag'):
-			flag0 = data.data[data.keys['flag']]
+		if 'flag' in data.keys:
+			flag0 = np.array(data.data[data.keys['flag']])
 			flag = flag0[useparts]
 		else:
 			flag = range(N)
@@ -199,25 +202,23 @@ class Configuration:
 				fig = plt.figure()
 				ax = fig.add_subplot(111, projection='3d')
 				ax.scatter(self.rval[:,0], self.rval[:,1], self.rval[:,2], zdir='z', c='b')
-			return 0
 		
 	
 	# read in data based on the content of the folder
 	# readtypes is now a list (when it is not 'all'): Read data of these types, which contains the tracer options
-	# tracers is type = [2], cornea is types = [1, 2, 3] 
+	# tracers is type = [2], cornea is types = [1, 2] 
 	def readDataMany(self,skip=0,step=1,howmany='all',Nvariable=False,readtypes = 'all'):
 		self.Nvariable=Nvariable
 		try:
 			filepattern = self.param.dumpname
 		except:
 			filepattern = 'frame'
-		filepattern = self.datapath + namepatt
-		files0 = sorted(glob(self.datapath + filepattern+'*.dat'))
+		files0 = sorted(glob.glob(self.datapath + filepattern + '*.dat'))
 		if len(files0) == 0:
-  			files0 = sorted(glob(self.datapath + filepattern+'*.dat.gz'))
+  			files0 = sorted(glob.glob(self.datapath + filepattern + '*.dat.gz'))
 		if len(files0) == 0:
 			print("Error: could not identify data file name pattern, does not end in .dat or .dat.gz, or is not part of parameters, and is not 'frame'. Stopping.")
-			break
+			sys.exit()
 		
 		if howmany == 'all':
 			files = files0
@@ -232,28 +233,29 @@ class Configuration:
 		# If we know that the number of particles is variable
 		# We need to actually go read the number of particles in each file first
 		if self.Nvariable:
-			self.Nval=np.zeros((self.Nsnap,))
+			self.Nval=np.zeros((self.Nsnap,),dtype='int')
 			u=0
 			for f in files:
 				#print "Pre - Processing file : ", f
 				data = ReadData(f)
 				x= np.array(data.data[data.keys['x']])
-				if readtypes = 'all':
+				if readtypes == 'all':
 					self.Nval[u]=len(x)
 				else:
-					if data.keys.has_key('type'):
+					if 'type' in data.keys:
 						ptype = data.data[data.keys['type']]
+						useparts = []
 						for tp in ptype:
 							if tp in readtypes:
 								useparts.append(tp)
 						if len(useparts)==0:
 							print('Error: No particles of the correct types in simulation, looking for ' + str(readtypes))
-							break
+							sys.exit()
 						else:
 							self.Nval[u]=len(useparts)
 					else:
 						print("Error: looking for data with types " + str(readtypes) + " but data has no type information.")
-						break
+						sys.exit()
 				#print self.Nval[u]	
 				u+=1
 			self.N=int(np.amax(self.Nval))
@@ -270,22 +272,26 @@ class Configuration:
 		self.radius=np.zeros((self.Nsnap,self.N))
 		self.ptype=np.zeros((self.Nsnap,self.N))
 		u=0
+		self.sigma = 0.0
+		print(self.Nval)
 		for f in files:
 			# first read the data, for all types
 			N,rval,vval,nval,radius,ptype,flag,sigma,monodisperse = self.readDataSingle(f,True,readtypes)
 			# Running tab on maximum particle size for CellList
-			if sigma>self.sigma
+			if sigma>self.sigma:
 				self.sigma = sigma
 			# Then arrange in a sensible shape
-			self.rval[u,:self.Nval(u),:]=rval
-			self.vval[u,:self.Nval(u),:]=vval
-			self.nval[u,:self.Nval(u),:]=nval
-			self.flag[u,:self.Nval(u)]=flag
-			self.radius[u,:self.Nval(u)]=radius
-			self.ptype[u,:self.Nval(u)]=ptype
+			self.rval[u,:self.Nval[u],:]=rval
+			self.vval[u,:self.Nval[u],:]=vval
+			self.nval[u,:self.Nval[u],:]=nval
+			self.flag[u,:self.Nval[u]]=flag
+			self.radius[u,:self.Nval[u]]=radius
+			self.ptype[u,:self.Nval[u]]=ptype
+			u+=1
 		
 		# Create the Interaction class
-		self.inter=Interaction(self.param,monodisperse,self.radius,self.ignore)
+		#__init__(self,param,sigma,ignore=False,debug=False):
+		self.inter=Interaction(self.param,self.sigma,self.ignore)
 			
 		# Apply periodic geomtry conditions just in case 
 		if self.geom.periodic:
@@ -332,7 +338,7 @@ class Configuration:
 			print("Warning! Reduced the cell size to manageable proportions (5 times mean radius). Re-check if simulating very long objects!")
 		self.clist=CellList(self.geom,cellsize)
 		# Populate it with all the particles:
-		if self.multiopt=="single"
+		if self.multiopt=="single":
 			for k in range(self.N):
 				self.clist.add_particle(self.rval[k,:],k)
 				
@@ -346,7 +352,7 @@ class Configuration:
 	# Tangent bundle: Coordinates in an appropriate coordinate system defined on the manifold
 	# and the coordinate vectors themselves, for all the particles
 	def getTangentBundle(self,frame=1):
-		if self.multiopt=="single"
+		if self.multiopt=="single":
 			self.x1,self.x2,self.e1,self.e2=self.geom.TangentBundle(self.rval)
 			return self.x1,self.x2,self.e1,self.e2
 		else:
@@ -355,7 +361,7 @@ class Configuration:
 	
 	# Rotate the frame (for bands on spheres). If in multimodus, indicate frame as well.
 	def rotateFrame(self,axis,rot_angle,frame=1):
-		if self.multiopt=="single"
+		if self.multiopt=="single":
 			self.rval = self.geom.RotateVectorial(self.rval,axis,-rot_angle)
 			self.vval = self.geom.RotateVectorial(self.vval,axis,-rot_angle)
 			self.nval = self.geom.RotateVectorial(self.nval,axis,-rot_angle)
@@ -375,7 +381,9 @@ class Configuration:
 			self.makeCellList(frame)
 			
 	# get neighbours of a particle
-	def getNeighbours(self,i,mult=1.0,dmax=2*self.sigma,frame=1):
+	def getNeighbours(self,i,mult=1.0,dmax="default",frame=1):
+		if dmax =="default":
+			dmax = 2*self.sigma
 		# Find potential neighbours from neighbour list first
 		if self.multiopt=="single":
 			cneighbours=self.clist.get_neighbours(self.rval[i,:])
@@ -415,7 +423,7 @@ class Configuration:
 		return neighbours, drvec, radi, radj
 	      
 	def compute_energy_and_pressure(self,frame=1):
-		if self.multiopt--"single":
+		if self.multiopt=="single":
 			N = self.N
 		else:
 			N = self.Nval[frame]
@@ -489,18 +497,20 @@ class Configuration:
 	
 	# Static structure factor
 	# Which is implicitly in 2D!!
-	def FourierTrans(self,qmax=0.3,whichframe=1,usetype='all',L=self.geom.Lx,verbose=True):
+	def FourierTrans(self,qmax=0.3,whichframe=1,usetype='all',L="default",verbose=True):
 		
+		if L=="default":
+			L = self.geom.Lx
 		if not self.geom.manifold == 'plane':
 			print("Configuration::FourierTrans - Error: attempting to compute 2d radially averaged Fourier transform on a non-flat surface. Stopping.")
-			break
+			sys.exit()
 		
 		# Note to self: only low q values will be interesting in any case. 
 		# The stepping is in multiples of the inverse box size. Assuming a square box.
-		print "Fourier transforming positions"
+		print("Fourier transforming positions")
 		dq=2*np.pi/L
 		nq=int(qmax/dq)
-		print "Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps."
+		print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
 		#print " After Qrad" 
 		fourierval=np.zeros((nq,nq),dtype=complex)
@@ -546,19 +556,21 @@ class Configuration:
 		return qrad,valrad
 	  
 	
-	def FourierTransVel(self,qmax=0.3,whichframe=1,usetype='all',L=self.geom.Lx,verbose=True):
+	def FourierTransVel(self,qmax=0.3,whichframe=1,usetype='all',L="default",verbose=True):
 		
+		if L=="default":
+			L = self.geom.Lx
 		if not self.geom.manifold == 'plane':
 			print("Configuration::FourierTransVel - Error: attempting to compute 2d radially averaged Fourier transform on a non-flat surface. Stopping.")
-			break
+			sys.exit()
 		
 		# Note to self: only low q values will be interesting in any case. 
 		# The stepping is in multiples of the inverse box size. Assuming a square box.
-		print "Fourier transforming velocities"
+		print("Fourier transforming velocities")
 		# Note: Factor of 2 compared to static structure factor. Why?
 		dq=np.pi/L
 		nq=int(qmax/dq)
-		print "Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps."
+		print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
 		#print " After Qrad" 
 		fourierval=np.zeros((nq,nq,2),dtype=complex)
@@ -597,20 +609,15 @@ class Configuration:
 		for l in range(nq2):
 			valrad[l,0]=np.mean(plotval_x[ptsx[l],ptsy[l]])
 			valrad[l,1]=np.mean(plotval_y[ptsx[l],ptsy[l]])
-
-		print verbose
-		print "Before plotting!"
 		if verbose:
-			#plt.figure()
-			print "after first plotting command"
-			#plt.pcolor(qx,qy,plotval_x)
-			#print "after first plotting command"
-			#plt.colorbar()
-			#plt.title('Velocities - x')
-			#plt.figure()
-			#plt.pcolor(qx,qy,plotval_y)
-			#plt.colorbar()
-			#plt.title('Velocities - y')
+			plt.figure()
+			plt.pcolor(qx,qy,plotval_x)
+			plt.colorbar()
+			plt.title('Velocities - x')
+			plt.figure()
+			plt.pcolor(qx,qy,plotval_y)
+			plt.colorbar()
+			plt.title('Velocities - y')
 		return qrad,valrad,Sqrad
 	
 	# Real space velocity correlation function
@@ -618,7 +625,7 @@ class Configuration:
 	def getVelcorrSingle(self,dx,xmax,whichframe=1,usetype='all',verbose=True):
 		# start with the isotropic one - since there is no obvious polar region
 		# and n is not the relevant variable, and v varies too much
-		print "Velocity correlation function for frame " + str(whichframe)
+		print("Velocity correlation function for frame " + str(whichframe))
 		npts=int(round(xmax/dx))
 		bins=np.linspace(0,xmax,npts)
 		velcorr=np.zeros((npts,))

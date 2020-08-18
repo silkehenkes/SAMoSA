@@ -354,7 +354,6 @@ class GeometryHourglass(Geometry):
 			self.periodic=True
 		else:
 			self.periodic=False
-		print self.periodic
 		self.R=param.const_params['R']
 		self.A=param.const_params['A']
 		self.H=param.box[2]
