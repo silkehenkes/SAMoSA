@@ -129,9 +129,9 @@ class Configuration:
 				ptype = ptype0
 			else:
 				useparts=[]
-				for tp in ptype0:
-					if tp in readtypes:
-						useparts.append(int(tp))
+				for v in range(len(ptype0)):
+					if ptype0[v] in readtypes:
+						useparts.append(v)
 				if len(useparts)==0:
 					print('Error: No particles of the correct types in simulation, looking for ' + str(readtypes))
 					sys.exit()
@@ -147,7 +147,8 @@ class Configuration:
 			else:
 				print("Error: looking for data with types " + str(readtypes) + " but data has no type information.")
 				sys.exit()
-			
+		print(useparts)
+		print(ptype)
 		
 		rval = np.column_stack((x[useparts],y[useparts],z[useparts]))
 		vval = np.column_stack((vx[useparts],vy[useparts],vz[useparts]))
@@ -177,6 +178,7 @@ class Configuration:
 			flag = flag0[useparts]
 		else:
 			flag = range(N)
+		print(flag)
 			
 		# Do the rest of the configuration only if this is not part of a series of reading in data
 		if internal:
@@ -245,9 +247,9 @@ class Configuration:
 					if 'type' in data.keys:
 						ptype = data.data[data.keys['type']]
 						useparts = []
-						for tp in ptype:
-							if tp in readtypes:
-								useparts.append(tp)
+						for v in range(len(ptype)):
+							if ptype[v] in readtypes:
+								useparts.append(v)
 						if len(useparts)==0:
 							print('Error: No particles of the correct types in simulation, looking for ' + str(readtypes))
 							sys.exit()
@@ -276,6 +278,7 @@ class Configuration:
 		print(self.Nval)
 		for f in files:
 			# first read the data, for all types
+			#return N,rval,vval,nval,radius,ptype,flag,sigma,monodisperse
 			N,rval,vval,nval,radius,ptype,flag,sigma,monodisperse = self.readDataSingle(f,True,readtypes)
 			# Running tab on maximum particle size for CellList
 			if sigma>self.sigma:
@@ -312,9 +315,9 @@ class Configuration:
 			else:
 				ptype = self.ptype[frame,:self.Nval[frame]]
 			useparts=[]
-			for tp in ptype:
-				if tp in usetype:
-					useparts.append(tp)
+			for v in range(len(ptype)):
+				if ptype[v] in usetype:
+					useparts.append(v)
 			if len(useparts)==0:
 				print("Configuration::getUseparts - Warning: no particles of the desired type(s) " + str(usetype))
 			return useparts
