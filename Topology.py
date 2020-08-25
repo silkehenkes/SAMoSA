@@ -27,7 +27,7 @@ class Topology(Configuration):
 		# Is there a current child configuration?
 		hasChild = False
 		
-	def getFlowField(self,inisnap,dsnap=1,debug=True):
+	def getFlowField(self,inisnap,dsnap=1,debug=False):
 		# attempt to compute the flow field between two snapshots, based on the uniquely labeled particles present in both
 		flag1=list(self.flag[inisnap,:self.Nval[inisnap]])
 		flag2=list(self.flag[inisnap+dsnap,:self.Nval[inisnap+dsnap]])
@@ -44,7 +44,8 @@ class Topology(Configuration):
 				useparts2.append(k2)
 				index.append(flag1[k1])
 			except:
-				print("particle " + str(flag1[k1]) + " died.")
+				if debug:
+					print("particle " + str(flag1[k1]) + " died.")
 				hasdied.append(k1)
 		# now compute the flow field from the difference in position
 		# time that has passed
@@ -86,7 +87,7 @@ class Topology(Configuration):
 		flag0 = self.flag[frame,useparts]
 		
 		# Generate child configuration (not through makeChild because we use flowField as velocities)
-		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=flowField,nval=nval0,radii=radius0,ptype=ptype0,flag=flag0)
+		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=nval0,radii=radius0,ptype=ptype0,flag=flag0)
 		return flowChild
 		
 	def makeFrameChild(self,frame):
@@ -99,7 +100,7 @@ class Topology(Configuration):
 	# use with frameChild to track defects in a particular frame
 	# use with flowChild and field = "velocity" and symtype = "polar" to track the flow field on the cornea
 	# Track the (polar) defects on a corneal flow field
-	def getDefects(self,child,field,symtype,zmin = 4, mult = 0.8,closeHoles=True,delaunay=False):
+	def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False):
 		
 		# Now generate tesselation and defects
 		tess = Tesselation(child)
@@ -111,10 +112,17 @@ class Topology(Configuration):
 			LoopList,Ival,Jval = tess.findLoop(closeHoles,zmin,mult)
 		print("found loops")
 		df = Defects(tess,child)
-		defects,numdefect=df.getDefects(symtype,field)
+		defects0,numdefect0=df.getDefects(symtype,field)
+		# Clean up and merge the resulting defects
+		defects,numdefect = df.mergeDefects(defects0,numdefect0,rmerge)
+		print("After merging field " + field + " with symtype " + symtype + " and mrege radius " + str(rmerge) + " found " + str(numdefect) + " defects:")
+		print(defects)
+		
 		
 		return defects, numdefect
-		
+	
+	
+
 	# On the sphere with bands: locate the orientation of the flow of material on there
 	# Reorient the data set
 	# Again, will use a child configuration. 

@@ -24,7 +24,7 @@ class Configuration:
 	# We need a completely generic constructor since we will have to make sub-classes as well
 	# as well as some with fresh positions in python from other code
 	def __init__(self,**kwargs):
-		print(' kwargs: ', kwargs)
+		#print(' kwargs: ', kwargs)
 		self.initype = kwargs["initype"]
 		if self.initype == "fromCSV":
 			self.fromCSV(kwargs["parampath"],kwargs["datapath"],kwargs["multiopt"])
@@ -70,11 +70,18 @@ class Configuration:
 		self.ptype = ptype
 		self.flag = flag
 		
+		# For defect tracking
+		vnorm = np.sqrt(self.vval[:,0]**2 + self.vval[:,1]**2+self.vval[:,2]**2)
+		self.vhat = self.vval / np.outer(vnorm,np.ones((3,)))
+		
 		self.N = len(radius)
 		self.sigma = np.mean(radius)
+		self.monodisperse = False
 		
-		self.inter=Interaction(self.param,False,self.radius,False)
+		#(self,param,sigma,ignore=False,debug=False):
+		self.inter=Interaction(self.param,self.radius,False,False)
 		self.geom=geometries[param.constraint](param)
+		self.makeCellList()
 		
 		
 				
@@ -87,6 +94,7 @@ class Configuration:
 		# And we have already narrowed down to the types we are looking for
 		self.usetype = "all"
 		self.sigma = parentconf.sigma
+		self.monodisperse = parentconf.monodisperse
 		
 		if parentconf.multiopt=="single":
 			useparts = parentconf.getUseparts(usetype)
@@ -107,11 +115,16 @@ class Configuration:
 			self.ptype = parentconf.ptype[frame,useparts]
 			self.flag = parentconf.flag[frame,useparts]
 			
+		# For defect tracking
+		vnorm = np.sqrt(self.vval[:,0]**2 + self.vval[:,1]**2+self.vval[:,2]**2)
+		self.vhat = self.vval / np.outer(vnorm,np.ones((3,)))
+		
 		# is that passing a pointer? Or should I make some new ones instead?
 		#self.inter=Interaction(self.param,monodisperse,self.radius,self.ignore)
 		#self.geom=geometries[param.constraint](param)
 		self.inter = parentconf.inter
 		self.geom = parentconf.geom
+		self.makeCellList()
 		
 		
 	def readDataSingle(self,filename,internal=False,readtypes='all'):
@@ -147,8 +160,6 @@ class Configuration:
 			else:
 				print("Error: looking for data with types " + str(readtypes) + " but data has no type information.")
 				sys.exit()
-		print(useparts)
-		print(ptype)
 		
 		rval = np.column_stack((x[useparts],y[useparts],z[useparts]))
 		vval = np.column_stack((vx[useparts],vy[useparts],vz[useparts]))
@@ -178,7 +189,6 @@ class Configuration:
 			flag = flag0[useparts]
 		else:
 			flag = range(N)
-		print(flag)
 			
 		# Do the rest of the configuration only if this is not part of a series of reading in data
 		if internal:
@@ -258,7 +268,6 @@ class Configuration:
 					else:
 						print("Error: looking for data with types " + str(readtypes) + " but data has no type information.")
 						sys.exit()
-				#print self.Nval[u]	
 				u+=1
 			self.N=int(np.amax(self.Nval))
 		else:
@@ -275,7 +284,6 @@ class Configuration:
 		self.ptype=np.zeros((self.Nsnap,self.N))
 		u=0
 		self.sigma = 0.0
-		print(self.Nval)
 		for f in files:
 			# first read the data, for all types
 			#return N,rval,vval,nval,radius,ptype,flag,sigma,monodisperse
@@ -521,7 +529,6 @@ class Configuration:
 		if self.multiopt=="single":
 			useparts = getUseparts(self,usetype)
 			N = len(useparts)
-			print(N)
 			for kx in range(nq):
 				for ky in range(nq):
 					# And, alas, no FFT since we are most definitely off grid. And averaging is going to kill everything.
@@ -530,7 +537,6 @@ class Configuration:
 		else:
 			useparts = getUseparts(self,usetype,whichframe)
 			N = len(useparts)
-			print(N)
 			for kx in range(nq):
 				for ky in range(nq):
 					# And, alas, no FFT since we are most definitely off grid. And averaging is going to kill everything.
@@ -581,7 +587,6 @@ class Configuration:
 		if self.multiopt=="single":
 			useparts = getUseparts(self,usetype)
 			N = len(useparts)
-			print(N)
 			for kx in range(nq):
 				for ky in range(nq):
 					fourierval[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1]))*self.vval[useparts,0])/N
@@ -589,7 +594,6 @@ class Configuration:
 		else:
 			useparts = getUseparts(self,usetype,whichframe)
 			N = len(useparts)
-			print(N)
 			for kx in range(nq):
 				for ky in range(nq):
 					fourierval[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.rval[whichframe,useparts,0]+qy[ky]*self.rval[whichframe,useparts,1]))*self.vval[whichframe,useparts,0])/N

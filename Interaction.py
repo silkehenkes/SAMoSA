@@ -15,7 +15,7 @@ class Interaction:
 		print(self.param.ntypes)
 		print(self.ignore)
 		# First step: unpack parameters to find out what kind of types we have, and what kind of potentials
-		if ((self.param.ntypes==1) or (self.ignore==True)):
+		if ((self.param.ntypes==1) or (self.ignore)):
 			if self.param.potential=='soft':
 				self.k=self.param.pot_params['k']
 				self.dmax=2*self.sigma

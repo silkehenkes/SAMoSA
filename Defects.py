@@ -98,14 +98,14 @@ class Defects:
 				else:
 					self.defects_v.append(defbit)
 					self.numdefect_v+=1
-				if field == 'orientation':
-					print('Number of orientation field defects: ' + str(self.numdefect_n))
-					print('Total charge of orientation field defects: ' + str(char_n))
-					return self.defects_n, self.numdefect_n
-				else:
-					print('Number of velocity field defects: ' + str(self.numdefect_v))
-					print('Total charge of velocity field defects: ' + str(char_v))
-					return self.defects_v,self.numdefect_v
+		if field == 'orientation':
+			print('Number of orientation field defects: ' + str(self.numdefect_n))
+			print('Total charge of orientation field defects: ' + str(char_n))
+			return self.defects_n, self.numdefect_n
+		else:
+			print('Number of velocity field defects: ' + str(self.numdefect_v))
+			print('Total charge of velocity field defects: ' + str(char_v))
+			return self.defects_v,self.numdefect_v
 									
 	
 	def computeDefect(self,thisLoop,field,symtype): 
@@ -234,6 +234,107 @@ class Defects:
 		else:
 			charge=0.0
 		return charge
+	
+	
+	# These defects tend to be unusable as they come out of there (at least on corneas) due to local fluctuations
+	# Do a round of cleanup by merging near pairs
+	# Merging very close defects
+	# Adapted to work on on single snapshots now
+	def mergeDefects(self,defects,ndefects,rmerge,verbose=False):
+		defects1=[]
+		# Dig out defects, associate position, charge and angles
+		ndef=len(defects)
+		charge0=[]
+		rval0=np.zeros((ndef,3))
+		charge0=np.zeros((ndef,))
+		for n in range(ndef):
+			charge0[n]=defects[n][0]
+			rval0[n,:]=defects[n][1:4]
+		# Compute pair distances and merge
+		# The old fashioned language here is because I don't want to encounter pairs twice
+		# that just makes trouble ...
+		if verbose:
+			print(charge0)
+		close=[]
+		for n in range(ndef):
+			for m in range(n+1,ndef):
+				dist=np.sqrt(np.sum((rval0[n,:]-rval0[m,:])**2))
+				if dist<rmerge:
+					close.append([n,m])
+		if close==[]:
+			rval=list(rval0)
+			charge=list(charge0)
+		else:
+			if verbose:
+				print(close)
+		# need to do a cluster merge on close ones (mostly 3s)
+		# Newman-Ziff like ... kind of
+		# Make every defect the root of a cluster of size 1
+		size=[1 for k in range(ndef)]
+		pointer=[-1 for k in range(ndef)]
+		# Stick in the known "bonds", i.e. close defects 
+		# Make the second point to the first, except if that alread points to something, then make the first point to the first.
+		for pair in close:
+			if pointer[pair[1]]==-1:
+				pointer[pair[1]]=pair[0]
+			else:
+				pointer[pair[0]]=pointer[pair[1]]
+		if verbose:
+			print(pointer)
+		# Now recursively relabel pointers and sizes. 
+		# Loop over all defects
+		for k1 in range(ndef):
+			#print "Starting " + str(k1)
+			# Find the root of my defect. That's either myself, or the root of a cluster
+			k2=self.findroot(pointer,k1)
+			# If we are part of a recognizable tree, and not at its root, i.e if it's not myself
+			# Merge k1 into that cluster, and make it point to k2
+			if k2!=k1:
+				size[k2]+=size[k1]
+				size[k1]=0
+				pointer[k1]=k2     
+		if verbose:
+			print(pointer)
+			print(size)
+		# reconstructing my list grouped by clusters now
+		rval=[]
+		charge=[]
+		# Loop over clusters. There are potentially as many as ndef of them.
+		for k in range(ndef):
+			thiscluster = [index for index,value in enumerate(pointer) if value==k]
+			# This is sticking the root at the end
+			if size[k]>0:
+				thiscluster.append(k)
+			# Congratulations, here is a cluster
+			if thiscluster!=[]:
+				# Simply sum up the charges
+				newcharge=np.sum(charge0[thiscluster])
+				if newcharge!=0.0:
+					# locate at the geometric average of the contributing defects
+					newr0=np.mean(rval0[thiscluster,:],axis=0)
+					# for a sphere manifold:
+					# normalize again onto the sphere
+					if self.conf.geom.manifold == 'sphere':
+						newr0=self.conf.geom.R*newr0/np.sqrt(np.sum(newr0**2))
+					rval.append(newr0)
+					charge.append(newcharge)
+		if verbose:
+			print(charge)
+		ndefects1 = len(charge)
+		for n in range(ndefects1):
+			tmp=[charge[n]]
+			tmp.extend(rval[n])
+			defects1.append(tmp)
+		return defects1, ndefects1
+	
+	# Newman-Ziff cluster merger: follow trees to their root
+	def findroot(self,pointer,i):
+		# If I am at the root (pointer = -1), stop, else keep going up the treeu
+		if pointer[i]<0:
+			ptri=i
+		else:
+			ptri=self.findroot(pointer,pointer[i])
+		return ptri
 		
 	def PlotDefects(self):
 		if HAS_MATPLOTLIB:
