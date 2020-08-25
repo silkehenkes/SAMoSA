@@ -168,6 +168,9 @@ class Defects:
 				print("Unknown symmetry type, doing nothing")
 				theta=0.0
 			#print theta
+			# Note that we can't have differences in angle bigger than -pi to pi between individual arrows here
+			if abs(theta)>np.pi:
+				theta = theta - 2*np.pi*np.sign(theta)
 			thetatot+=theta
 			#print thetatot
 			t0=t
@@ -178,6 +181,10 @@ class Defects:
 			charge=0.5*int(round(thetatot/(np.pi)))
 		else:
 			charge=int(round(thetatot/(2*np.pi)))
+			if abs(charge)>1:
+				print(charge)
+				print(thetatot)
+				print(thisLoop)
 		
 		# except at the poles: that stuff is garbage
 		# remove, but ONLY if the algorithm was parallel transport (<-- found you, cornea analysis bug ...)

@@ -19,6 +19,9 @@ class Tesselation:
 		self.geom=self.conf.geom
 		self.debug=debug
 		self.ordered_patches = False
+		
+		# We will need local coordinates on the surface
+		self.conf.getTangentBundle()
              
 	# Create tesselation patches using the dual to a Delaunay triangulation
 	# Use scip.spatial for a plane, and convex hull for a sphere (or related, not been tested)
@@ -197,8 +200,7 @@ class Tesselation:
 	# Strongly preferred option for inhomogeneous systems
 	# Only option for irregular surfaces
 	def findLoop(self,closeHoles=False,zmin=3,mult0=1.0,mult1=MMAX):
-		# We will need local coordinates on the surface
-		self.conf.getTangentBundle()
+		
 		
 		neighList=[]
 		self.Ival=[]
@@ -343,7 +345,7 @@ class Tesselation:
       
 	# Much prettier: a loop that is too big (as measured by the mean square distance of the distances to the particles)
 	# Deconstruct it into lots of little loops (virtual ones), with defined centers
-	def makeEdges(self,rmax,maxlen=20):
+	def makeEdges(self,maxlen=20):
 		for l0 in range(len(self.LoopList)):
 			llist=self.LoopList[l0]
 			looppos=self.rval[llist]
@@ -360,9 +362,9 @@ class Tesselation:
 						kside=len(llist)-1
 					# Attempting to catch the inward pointing loops: the have to be global boundary ~sqrt(N)
 					if len(llist)<0.5*np.sqrt(len(self.rval)):
-						newcen=0.5*(self.rval[llist[k]]+self.rval[llist[kside]])-self.conf.inter.sigma*dlvec[k,:]/np.sqrt(np.sum(dlvec[k,:]**2))
+						newcen=0.5*(self.rval[llist[k]]+self.rval[llist[kside]])-self.conf.sigma*dlvec[k,:]/np.sqrt(np.sum(dlvec[k,:]**2))
 					else:
-						newcen=0.5*(self.rval[llist[k]]+self.rval[llist[kside]])+self.conf.inter.sigma*dlvec[k,:]/np.sqrt(np.sum(dlvec[k,:]**2))
+						newcen=0.5*(self.rval[llist[k]]+self.rval[llist[kside]])+self.conf.sigma*dlvec[k,:]/np.sqrt(np.sum(dlvec[k,:]**2))
 					self.LoopCen.append(newcen)
 					try:
 						self.ParList[llist[k]].remove(l0)
@@ -407,7 +409,7 @@ class Tesselation:
 		if not self.ordered_patches: 
 			raise Exception('Patches have to be ordered in order to cumpute their area.')
 		self.area = []
-		for k in xrange(len(self.ParList)):
+		for k in range(len(self.ParList)):
 			if len(self.ParList[k])>0:
 				xc, yc, zc = 0.0, 0.0, 0.0
 				for l in self.ParList[k]:

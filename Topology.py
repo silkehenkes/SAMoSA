@@ -47,12 +47,25 @@ class Topology(Configuration):
 				if debug:
 					print("particle " + str(flag1[k1]) + " died.")
 				hasdied.append(k1)
-		# now compute the flow field from the difference in position
-		# time that has passed
-		### FIX THIS
-		self.param.dt=0.001 # eff it for now, it's always that ...
-		deltat = self.param.dt*self.param.dump['freq']*dsnap
-		flowField = (self.rval[inisnap+dsnap,useparts2,:]-self.rval[inisnap,useparts1,:])/deltat
+		
+		# Make this the actual displacement field
+		flowField = (self.rval[inisnap+dsnap,useparts2,:]-self.rval[inisnap,useparts1,:])
+		
+		# also generate a polarisation field that is averaged over the snaps in between
+		nsnap = dsnap+1
+		polarField = self.nval[inisnap,useparts1,:]/nsnap
+		for u in range(1,nsnap):
+			print(u)
+			flag2=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
+			useparts2=[]
+			for k in range(len(useparts1)):
+				k2 = flag2.index(index[k])
+				useparts2.append(k2)
+			polarField = polarField +  self.nval[inisnap+u,useparts2,:]/nsnap
+		# need to normalise again for tracking
+		nnorm = np.sqrt(polarField[:,0]**2 + polarField[:,1]**2+polarField[:,2]**2)
+		polarField = polarField / np.outer(nnorm,np.ones((3,)))
+			
 		
 		if debug:
 			plt.figure(figsize=(8,8))
@@ -73,21 +86,20 @@ class Topology(Configuration):
 			plt.gca().set_aspect('equal')
 			plt.title('Instantaneous velocity field')
 			
-		return useparts1, flowField
+		return useparts1, flowField, polarField
 	
-	def makeFlowChild(self,frame,useparts,FlowField):
+	def makeFlowChild(self,frame,useparts,FlowField,PolarField):
 		# To handle this, generate a child configuration with the flow field as velocities.
 		# FIX: Copy parameters, currently. Go down a level of complexity later
 		param0 = self.param
 		# Take out the persistent particles of frame frame for which the flow field is defined
 		rval0 = self.rval[frame,useparts,:]
-		nval0 = self.nval[frame,useparts,:]
 		radius0 = self.radius[frame,useparts]
 		ptype0 = self.ptype[frame,useparts]
 		flag0 = self.flag[frame,useparts]
 		
 		# Generate child configuration (not through makeChild because we use flowField as velocities)
-		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=nval0,radii=radius0,ptype=ptype0,flag=flag0)
+		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=PolarField,radii=radius0,ptype=ptype0,flag=flag0)
 		return flowChild
 		
 	def makeFrameChild(self,frame):
@@ -115,13 +127,42 @@ class Topology(Configuration):
 		defects0,numdefect0=df.getDefects(symtype,field)
 		# Clean up and merge the resulting defects
 		defects,numdefect = df.mergeDefects(defects0,numdefect0,rmerge)
+		#defects = defects0
+		#numdefect = numdefect0
 		print("After merging field " + field + " with symtype " + symtype + " and mrege radius " + str(rmerge) + " found " + str(numdefect) + " defects:")
 		print(defects)
 		
+		# tesselation for writer ... less than elegant
+		return defects, numdefect, tess
+	
+	# locate the central defect. Starting point: pure geometry
+	def centralDefect(self,child,defects,numdefect,maxangle=0.3*np.pi):
+		# translate that maxangle into max flat x y distance:
+		maxdist = child.geom.R*np.sin(maxangle)
+		if numdefect ==1:
+			return np.array(defects[0][1:4])
+		else:
+			options = []
+			for k in range(numdefect):
+				dist = np.sqrt(defects[k][1]**2+defects[k][2]**2)
+				if dist < maxdist:
+					print("Potential central defect!")
+					options.append(k)
+			print(options)
+			if len(options)==0:
+				print("No central defect ...")
+				return "problem"
+			elif len(options)==1:
+				return np.array(defects[options[0]][1:4])
+			elif len(options)==2:
+				# Merge them
+				pos = 0.5*(np.array(defects[options[0]][1:4])+np.array(defects[options[1]][1:4]))
+				return pos
+			else:
+				print("A horrible mess")
+				return "problem"
+					
 		
-		return defects, numdefect
-	
-	
 
 	# On the sphere with bands: locate the orientation of the flow of material on there
 	# Reorient the data set
@@ -199,10 +240,11 @@ class Topology(Configuration):
 	
 	# Reorient configuation based on the position of a defect (as a simple coordinate triplet)
 	# For Cornea, but potentially for other things too 
-	def redressTiltDefect(self,child,defectpos):
+	def redressTiltDefect(self,child,defectpos,debug=False):
 		
 		# The direction of our symmetry axis is the defect position now
-		direction=defectpos
+		direction=defectpos/np.linalg.norm(defectpos)
+		ez = np.array([0,0,1])
 	
 		# This will be the axis angle around which we need to rotate the configuation for the director to point along z
 		axis = np.cross(direction,ez)
@@ -222,17 +264,71 @@ class Topology(Configuration):
 			else:
 				print('Error: Matplotlib does not exist on this machine, cannot plot system')
 				
-		axis0 = np.empty((childConf.N,3))
+		axis0 = np.empty((child.N,3))
 		axis0[:,0] = axis[0]
 		axis0[:,1] = axis[1]
 		axis0[:,2] = axis[2]
 		
 		# Now: actually rotate the configuration and redo the cell list
 		child.rotateFrame(axis0,rot_angle)
-		# Need to redo the cell list after the rotation
-		child.redoCellList()
 		
 		return child, axis, rot_angle
+	
+	# Cornea profiles: Simpler, to be able to compare to the experiments
+	# Directly adapted from corresponding code
+	# There does appear to be an errant minus sign in the experimental etheta? 
+	def getSwirlInward(self,child,field,thetamax =70/360.0*2*np.pi,nbin=50,verbose=False):
+	
+		swirl=np.zeros((child.N,))
+		inward=np.zeros((child.N,))
+		#thetaD=np.zeros((child.N,))
+		
+		# full tangent getTangentBundle
+		theta,phi,etheta,ephi = child.getTangentBundle()
+		for k in range(child.N):
+			#thetaD[k], etheta, ephi = get_local_defect(x[k],y[k],z[k],zdir,radius)
+			#swirl[k]=flow_field[0,k]*ephi[0]+flow_field[1,k]*ephi[1]+flow_field[2,k]*ephi[2]
+			#inward[k]=flow_field[0,k]*etheta[0]+flow_field[1,k]*etheta[1]+flow_field[2,k]*etheta[2]
+			if field == "velocity":
+				swirl[k] = child.vhat[k,0]*ephi[k,0]+child.vhat[k,1]*ephi[k,1]+child.vhat[k,2]*ephi[k,2]
+				inward[k] = -(child.vhat[k,0]*etheta[k,0]+child.vhat[k,1]*etheta[k,1]+child.vhat[k,2]*etheta[k,2])
+			elif field == "orientation":
+				swirl[k] = child.nval[k,0]*ephi[k,0]+child.nval[k,1]*ephi[k,1]+child.nval[k,2]*ephi[k,2]
+				inward[k] = -(child.nval[k,0]*etheta[k,0]+child.nval[k,1]*etheta[k,1]+child.nval[k,2]*etheta[k,2])
+			
+		#plt.figure()
+		#plt.plot(theta,swirl,'.r')
+		#plt.plot(theta,inward,'.g')
+			
+		# and more cleanly binned
+		
+		thetabin=np.linspace(0,thetamax,nbin)
+		dtheta=thetabin[1]-thetabin[0]
+		# bins of individual ones
+		binval = (np.floor(theta/dtheta)).astype(int)
+		swirlhist=np.zeros((nbin,))
+		swirlerr=np.zeros((nbin,))
+		inhist=np.zeros((nbin,))
+		inerr=np.zeros((nbin,))
+		isdata=[]
+		for b in range(nbin):
+			inbin=np.where(binval==b)
+			if len(inbin)>0:
+				isdata.append(b)
+				swirlhist[b]=np.mean(swirl[inbin])
+				swirlerr[b]=np.std(swirl[inbin])/np.sqrt(len(inbin))
+				inhist[b]=np.mean(inward[inbin])
+				inerr[b]=np.std(inward[inbin])/np.sqrt(len(inbin))
+		
+		if verbose:
+			plt.figure()
+			plt.errorbar(thetabin[isdata]+dtheta/2,swirlhist[isdata],swirlerr[isdata],marker='o',color='r',label='swirl')
+			plt.errorbar(thetabin[isdata]+dtheta/2,inhist[isdata],inerr[isdata],marker='o',color='g',label='inward')
+			plt.xlabel('theta')
+			plt.ylabel('flow component ' + str(field))
+			plt.legend()
+			
+		return thetabin, isdata, swirlhist, inhist, swirlerr, inerr
 		
 	
 	# compute the profiles of everything on a sphere

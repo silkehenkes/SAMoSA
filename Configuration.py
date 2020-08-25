@@ -76,6 +76,7 @@ class Configuration:
 		
 		self.N = len(radius)
 		self.sigma = np.mean(radius)
+		print("New sigma is " + str(self.sigma))
 		self.monodisperse = False
 		
 		#(self,param,sigma,ignore=False,debug=False):
@@ -375,6 +376,8 @@ class Configuration:
 		if self.multiopt=="single":
 			self.rval = self.geom.RotateVectorial(self.rval,axis,-rot_angle)
 			self.vval = self.geom.RotateVectorial(self.vval,axis,-rot_angle)
+			self.vhat = self.geom.RotateVectorial(self.vhat,axis,-rot_angle)
+			self.vhat=((self.vhat).transpose()/(np.sqrt(np.sum(self.vhat**2,axis=1))).transpose()).transpose()
 			self.nval = self.geom.RotateVectorial(self.nval,axis,-rot_angle)
 			self.nval=((self.nval).transpose()/(np.sqrt(np.sum(self.nval**2,axis=1))).transpose()).transpose()
 			#self.vel = np.sqrt(self.vval[:,0]**2 + self.vval[:,1]**2 + self.vval[:,2]**2)

@@ -165,7 +165,7 @@ class Writer:
 		writer.Write()
 		print("Wrote File")
 		
-	def writePatches(self,tess,outname):
+	def writePatches(self,tess,outname,computeDensity=False):
 		print(outname)
 		points = vtk.vtkPoints()
 		polygons = vtk.vtkCellArray()
@@ -220,22 +220,23 @@ class Writer:
 		#polygonPolyData.GetCellData().AddArray(ptype)
 		
 		# Add denisity
-		tess.ComputePatchArea()
-		density = vtk.vtkDoubleArray()
-		density.SetNumberOfComponents(1)
-		density.SetName('Density')
-		for k in havePoly:
-			if tess.conf.geom.manifold=='sphere':
-				N = tess.conf.N
-				R = tess.conf.geom.R
-				A0 = 4.0*np.pi*R**2/N
-				if tess.area[k] < 0.1*A0:
-					density.InsertNextValue(10.0)
+		if computeDensity:
+			tess.ComputePatchArea()
+			density = vtk.vtkDoubleArray()
+			density.SetNumberOfComponents(1)
+			density.SetName('Density')
+			for k in havePoly:
+				if tess.conf.geom.manifold=='sphere':
+					N = tess.conf.N
+					R = tess.conf.geom.R
+					A0 = 4.0*np.pi*R**2/N
+					if tess.area[k] < 0.1*A0:
+						density.InsertNextValue(10.0)
+					else:
+						density.InsertNextValue(A0/tess.area[k])
 				else:
-					density.InsertNextValue(A0/tess.area[k])
-			else:
-				density.InsertNextValue(1.0/tess.area[k])
-		polygonPolyData.GetCellData().AddArray(density)
+					density.InsertNextValue(1.0/tess.area[k])
+			polygonPolyData.GetCellData().AddArray(density)
 
 
 		writer = vtk.vtkXMLPolyDataWriter()
