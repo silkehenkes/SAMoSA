@@ -10,7 +10,7 @@ class Hessian:
 		# First check for suitable data format of configuration
 		if conf.multiopt == "many":
 			print("Hessian: Error - Can only construct a Hessian with a single set of input coordinates. Construct single-position configuration instead.")
-			break
+			sys.exit()
 		self.conf=conf
 		self.geom = conf.geom
 		#self.rval=self.conf.rval
@@ -41,7 +41,7 @@ class Hessian:
 				print("Hessian: Calculating 3d Hessian on a plane!")
 			else:
 				print("Hessian: Error: 3d Hessian has not yet been implemented on " + self.geom.manifold + " manifolds!")
-				break
+				sys.exit()
 			# This matrix is in principle 3N by 3N. We will have to be careful later on in throwing out extra off-surface modes
 			print("Hessian: Info - allocating the " + str(3*self.conf.N) + " by " + str(3*self.conf.N) + " 3d Hessian matrix.")
 			self.Hessian=np.zeros((3*self.Nrigid,3*self.N))
@@ -52,19 +52,19 @@ class Hessian:
 				print("Hessian: Calculating Hessian on a plane!")
 			else:
 				print("Hessian: Error: 2d Hessian has not yet been implemented on " + self.geom.manifold + " manifolds!" )
-				break
+				sys.exit()
 			print("Hessian: Info - allocating the " + str(2*self.N) + " by " + str(2*self.N) + " 2d Hessian matrix.")
 			self.Hessian=np.zeros((2*self.Nrigid,2*self.N))
 		else:
 			print("Hessian: Error - unknown dimension argument " + str(dim) + " is not 2 or 3. Stopping.")
-			break
+			sys.exit()
 		# Constructing the actual matrix
 		fsum=0.0
 		fav=0.0
 		for i in range(self.N):
 			if i not in self.rattlers:
 				if (i%200==0):
-					print i
+					print (i)
 				# get some of the constants that are necessary here:
 				neighbours, drvec, radi, radj = self.conf.getNeighbours(i,self.conf.inter.getMult(),self.conf.inter.getDmax())
 				# particle distances and contact normal vectors
@@ -175,8 +175,8 @@ class Hessian:
 					#print diagsquare
 					self.Hessian[2*i:(2*i+2),2*i:(2*i+2)]=-diagsquare
 		fav/=self.N
-		print "Hessian: Estimating distance from mechanical equilibrium of initial configuration "
-		print "Scaled force sum is " + str(fsum/fav)
+		print("Hessian: Estimating distance from mechanical equilibrium of initial configuration ")
+		print("Scaled force sum is " + str(fsum/fav))
 			
 	def getModes(self):
 		# Let's have a look if what we get is in any way reasonable
@@ -190,10 +190,10 @@ class Hessian:
 		#print HessianASym
 		# Use routines for hermitian eigenvector decomposition
 		# Default is ascending order, which suits us
-		print "Starting Diagonalisation!"
+		print("Starting Diagonalisation!")
 		self.eigval, self.eigvec = LA.eigh(HessianSym)
-		print "The smallest eigenvalue is: " + str(np.amin(self.eigval))
-		print self.eigval
+		print("The smallest eigenvalue is: " + str(np.amin(self.eigval)))
+		print(self.eigval)
 		# Crosscheck on sanity
 		if self.dim == 3:
 			wx=np.zeros((self.N,))
@@ -209,9 +209,9 @@ class Hessian:
 				plt.figure()
 				eigrank=np.linspace(0,3*self.N,3*self.N)
 				plt.plot(eigrank,self.eigval,'.-')
-				print wx
-				print wy
-				print wz
+				print (wx)
+				print (wy)
+				print (wz)
 			return wx,wy,wz
 		else:
 			wx=np.zeros((self.N,))
@@ -225,15 +225,15 @@ class Hessian:
 				plt.figure()
 				eigrank=np.linspace(0,2*self.N,2*self.N)
 				plt.plot(eigrank,self.eigval,'.-')
-				print wx
-				print wy
+				print (wx)
+				print (wy)
 			return wx,wy
 			
 		
 	def plotModes3d(self,omegamax=3.0,npts=100):
 		if self.dim != 3:
 			print("Hessian: Error - Modes plotting is currently implemented in 3d only")
-			break
+			sys.exit()
 		# Straight here: The projection ratios on the sphere/plane
 		projrat=np.zeros((3*self.N,))
 		# Get the tangent bundle and coordinates
@@ -335,11 +335,11 @@ class Hessian:
 		# Strictly 2d affair
 		if self.dim != 2:
 			print("Error: Hessial - Fourier transform is only implemented for 2d situations")
-			break
-		print "Fourier transforming mode" + str(whichmode)
+			sys.exit()
+		print("Fourier transforming mode" + str(whichmode))
 		dq=2.0*np.pi/self.conf.geom.Lx
 		nq=int(qmax/dq)
-		print "Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps."
+		print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
 		fourierlong0=np.zeros((nq,nq),dtype=complex)
 		fouriertrans0=np.zeros((nq,nq),dtype=complex)
@@ -375,12 +375,12 @@ class Hessian:
 	def ModesFourier(self,whichmode,qmax=0.3,verbose=True,eps=0.001):
 		# Strictly 2d affair
 		if self.dim != 2:
-			print("Error: Hessial - Fourier transform is only implemented for 2d situations")
-			break
-		print "Fourier transforming mode" + str(whichmode)
+			print("Error: Hessian - Fourier transform is only implemented for 2d situations")
+			sys.exit()
+		print("Fourier transforming mode" + str(whichmode))
 		dq=np.pi/self.conf.geom.Lx
 		nq=int(qmax/dq)
-		print "Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps."
+		print ("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
 		fouriertrans=np.zeros((nq,nq,2),dtype=complex)
 		eigx=self.eigvec[0:2*self.N:2,whichmode]
@@ -391,7 +391,7 @@ class Hessian:
 				# Both have the same FT, but the local bits are q . e, and q X e
 				fouriertrans[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.conf.rval[:,0]+qy[ky]*self.conf.rval[:,1]))*eigx)/self.N #len(self.rval[:,0])
 				fouriertrans[kx,ky,1]=np.sum(np.exp(1j*(qx[kx]*self.conf.rval[:,0]+qy[ky]*self.conf.rval[:,1]))*eigy)/self.N # len(self.rval[:,0])
-                Sq=np.real(fouriertrans[:,:,0])**2+np.imag(fouriertrans[:,:,0])**2+np.real(fouriertrans[:,:,1])**2+np.imag(fouriertrans[:,:,1])**2
+		Sq=np.real(fouriertrans[:,:,0])**2+np.imag(fouriertrans[:,:,0])**2+np.real(fouriertrans[:,:,1])**2+np.imag(fouriertrans[:,:,1])**2
 		# Produce a radial averaging to see if anything interesting happens
 		nq2=int(2**0.5*nq)
 		Sqrad=np.zeros((nq2,))
@@ -404,14 +404,13 @@ class Hessian:
 	def getModuli(self,qmax=1.5,verbose=True):
 		# Strictly 2d affair
 		if self.dim != 2:
-			print("Error: Hessian - gettin moduli is only implemented for 2d situations")
-			break
-		print "Fourier transforming Hessian"
+			print("Error: Hessian - getting moduli is only implemented for 2d situations")
+			sys.exit()
+		print ("Fourier transforming Hessian")
 		dq=2.0*np.pi/self.conf.geom.Lx
 		nq=int(qmax/dq)
-		print "Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps."
+		print( "Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
-		print "After qrad"
 		longitudinal0=np.zeros((nq,nq))
 		transverse0=np.zeros((nq,nq))
 		for k in range(nq):
@@ -419,8 +418,8 @@ class Hessian:
 			for l in range(nq):
 				ky=qy[l]
 				if verbose:
-					print kx
-					print ky
+					print (kx)
+					print (ky)
 				# In Fourier space, for a given k (vector), we define the 2x2 k hessian as
 				khessian=np.zeros((2,2),dtype=complex)
 				khessian[0,0]=np.dot(np.exp(1j*kx*self.rval[:,0]),np.dot(self.Hessian[0:2*self.N:2,0:2*self.N:2],np.exp(-1j*kx*self.rval[:,0])))/self.N
@@ -440,7 +439,7 @@ class Hessian:
 					longitudinal0[k,l]=eigk[0]
 					transverse0[k,l]=eigk[1]
 				if verbose:
-					print "Found eigenvalues long " + str(longitudinal0[k,l]) + " and transverse " + str(transverse0[k,l])
+					print ("Found eigenvalues long " + str(longitudinal0[k,l]) + " and transverse " + str(transverse0[k,l]))
 		nq2=int(2**0.5*nq)
 		longitudinal=np.zeros((nq2,))
 		transverse=np.zeros((nq2,))

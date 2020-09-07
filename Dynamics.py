@@ -7,10 +7,10 @@ from Hessian import *
 class Dynamics(Configuration):
 	
 	# Use the Configuration default constructor. We *need* to be set to self.multiopt == "many"!
-	def validate_initialise():
+	def validate_initialise(self):
 		if not self.multiopt == "many":
 			print("Dynamics:: Error: Cannot use dynamics without reading in multiple files! Aborting.")
-			break
+			sys.exit()
 		# Some booleans to avoid redoing the whole shebang twice as some computations depend on others
 		self.hasMSD = False
 		# Have we isolated the particles we are following? Implicit assumption: we are only ever tracking the 
@@ -19,7 +19,7 @@ class Dynamics(Configuration):
 		self.tracked = False
 	
 	# By design, this is only meaningful on the whole data set, e.g. do not subtract for tracer particles only
-	def takeDrift()
+	def takeDrift(self):
 		self.drift=np.zeros((self.Nsnap,3))
 		if self.Nvariable:
 			print("Dynamics:: Variable N: Taking off the drift is meaningless. Doing nothing.")
@@ -33,11 +33,11 @@ class Dynamics(Configuration):
 	# Tracking a subset of particles: This identifies the relevant ones
 	# and gives an error if that number changes or the flags don't match
 	# complicated: if the particles we are aiming to track move around in their list index
-	def self.getTrack(usetype):
+	def getTrack(self,usetype):
 		if usetype == 'all':
 			if self.Nvariable:
 				print("Dynamics::getTrack - Attempting to track ALL particles while N is variable: this doesn't make sense. Stopping")
-				break
+				sys.exit()
 			else:
 				self.Ntrack = self.N
 				self.usethese = range(self.Ntrack)
@@ -54,7 +54,7 @@ class Dynamics(Configuration):
 				N = len(useparts)
 				if N != self.Ntrack:
 					print("Dynamics::getTrack - Error: Number of tracked particles is changing, check that chosen type is not dividing or dying!")
-					break
+					sys.exit()
 				flag = self.flag(u,useparts)
 				# Check that 1. These are the same labels at the same places. Can continue to use vectorisation in that case
 				if not np.array.equal(flag,flag0):
@@ -68,7 +68,7 @@ class Dynamics(Configuration):
 							usethese0[u,idx] = useparts[k]
 					else:
 						print("Dynamics::getTrack - Error: Labels (flags) of tracked particles are changing, something is wrong!")
-						break
+						sys.exit()
 			if self.complicated:
 				self.usethese = usethese0
 			else:
@@ -77,7 +77,7 @@ class Dynamics(Configuration):
 				
 	# relative velocity distribution (and average velocity)
 	# component wise as well, assumes x and y directions only
-	def getVelDist(self,usetype='all',bins,bins2):
+	def getVelDist(self,bins,bins2,usetype='all',):
 		vav=np.zeros((self.Nsnap,))
 		vdist=np.zeros((len(bins)-1,))
 		vdist2=np.zeros((len(bins2)-1,))
@@ -102,7 +102,7 @@ class Dynamics(Configuration):
 	
 		
 ####################################### Glassy Physics ###############################################################
-	def getMSD(self,usetype='all',takeDrift,verbose=True):
+	def getMSD(self,takeDrift,usetype='all',verbose=True):
 		self.msd=np.empty((self.Nsnap,))
 		
 		# Careful, we need a sanity check: We can only compute a MSD if the particles we're tracking isn't changing (whatever the rest of the system is doing)
@@ -118,7 +118,7 @@ class Dynamics(Configuration):
 			if takeDrift:
 				if self.complicated:
 					print("Dynamics::getMSD - Taking off drift at constant N while complicated labels: My head is hurting, stopping here. Reconsider what you're doing ... it's probably wrong")
-					break
+					sys.exit()
 				else:
 					hmm=(self.drift[:smax,:]-self.drift[u:,:])
 					takeoff=np.einsum('j,ik->ijk',np.ones((self.Ntrack,)),hmm)
@@ -196,7 +196,7 @@ class Dynamics(Configuration):
         
 	# Computes non-gaussian factor / kurtosis (4th moment), and also the MSD (2nd moment) if it hasn't been done yet
 	# returns all three
-	def getNonGaussian(self,usetype='all',takeDrift,verbose=True):
+	def getNonGaussian(self,takeDrift,usetype='all',verbose=True):
 		
 		kurtosis=np.empty((self.Nsnap,))
 		nongaussian=np.empty((self.Nsnap,))
@@ -217,7 +217,7 @@ class Dynamics(Configuration):
 			if takeDrift:
 				if self.complicated:
 					print("Dynamics::getNonGaussian - Taking off drift at constant N while complicated labels: My head is hurting, stopping here. Reconsider what you're doing ... it's probably wrong")
-					break
+					sys.exit()
 				else:
 					hmm=(self.drift[:smax,:]-self.drift[u:,:])
 					takeoff=np.einsum('j,ik->ijk',np.ones((self.Ntrack,)),hmm)
@@ -281,7 +281,7 @@ class Dynamics(Configuration):
 			if takeDrift:
 				if self.complicated:
 					print("Dynamics::SelfIntermediate - Taking off drift at constant N while complicated labels: My head is hurting, stopping here. Reconsider what you're doing ... it's probably wrong")
-					break
+					sys.exit()
 				else:
 					hmm=(self.drift[:smax,:]-self.drift[u:,:])
 					takeoff=np.einsum('j,ik->ijk',np.ones((self.Ntrack,)),hmm)
@@ -297,7 +297,7 @@ class Dynamics(Configuration):
 						if self.geom.periodic:
 							SelfInt[u] += np.sum(np.exp(1.0j*qval[0]*(self.geom.ApplyPeriodicX(-self.rval[s,ps,0]+self.rval[u+s,pu,0]))+1.0j*qval[1]*(self.geom.ApplyPeriodicY(-self.rval[s,ps,1]+self.rval[u+s,pu,1]))+1.0j*qval[2]*(self.geom.ApplyPeriodicZ(-self.rval[s,ps,2]+self.rval[u+s,pu,2]))))/(self.N*smax)
 						else:
-							SelfInt[u] += np.sum(np.sum(np.exp(1.0j*qval[0]*(-self.rval[s,ps,0]+self.rval[u+2,pu,0])+1.0j*qval[1]*(-self.rval[s,ps,1]+self.rval[u+s,pu,1])+1.0j*qval[2]*(-self.rval[s,ps,2]+self.rval[u+s,pu,2])))/(self.Ntrack*smax)
+							SelfInt[u] += np.sum(np.sum(np.exp(1.0j*qval[0]*(-self.rval[s,ps,0]+self.rval[u+2,pu,0])+1.0j*qval[1]*(-self.rval[s,ps,1]+self.rval[u+s,pu,1])+1.0j*qval[2]*(-self.rval[s,ps,2]+self.rval[u+s,pu,2]))))/(self.Ntrack*smax)
 				else:
 					if self.geom.periodic:
 						SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(self.geom.ApplyPeriodicX(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0]))+1.0j*qval[1]*(self.geom.ApplyPeriodicY(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1]))+1.0j*qval[2]*(self.geom.ApplyPeriodicZ(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2]))),axis=1),axis=0)/(self.N*smax)
@@ -328,15 +328,15 @@ class Dynamics(Configuration):
 		dq=1.0/self.geom.Lx
 		nq=int(qmax/dq)
 		if nq>nmax:
-			print "Coarsening q interval to reduce computational load"
+			print("Coarsening q interval to reduce computational load")
 			nq=nmax
 			dq=qmax/nq
 		nq2=int(2**0.5*nq)
-		print "Stepping space Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps."
+		print("Stepping space Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		dom=1.0/(self.Nsnap*self.param.dt*self.param.dump['freq'])
 		nom1=int(omegamax/dom)
 		nom=2*int(omegamax/dom)+1
-		print "Stepping time Fourier transform with step " + str(dom)+ ", resulting in " + str(nom)+ " steps."
+		print("Stepping time Fourier transform with step " + str(dom)+ ", resulting in " + str(nom)+ " steps.")
 		# Formally: S(q,omega) = 1/N int dt \rho_q(t) \rho*_q(0) e^i\omega t, where \rho_q(t) = \int dr \rho(r,t) e^iq r
 		# The second part is what we already had for the positional static structure factor
 		# For simplicity reasons, do the radial averaging before taking the time transform
@@ -344,7 +344,7 @@ class Dynamics(Configuration):
 		rhorad=np.zeros((self.Nsnap,nq2),dtype=complex)
 		for u in range(self.Nsnap):
 			if (u%10==0):
-				print u
+				print (u)
 			fourierval=np.empty((nq,nq),dtype=complex)
 			for kx in range(nq):
 				for ky in range(nq):
@@ -364,7 +364,7 @@ class Dynamics(Configuration):
 		for no in range(0,nom):
 			omega[no]=(-nom1+no)*dom
 			DynStruct[no,:]=np.einsum('ij,i', rhocorr, np.exp(1j*omega[no]*tval))
-		print omega
+		print (omega)
 		# OK, what have we got? Take the absolute value and look
 		PlotDynStruct=np.real(DynStruct)**2+np.imag(DynStruct)**2
 		if verbose:
@@ -404,16 +404,16 @@ class Dynamics(Configuration):
 		dq=1.0/self.geom.Lx
 		nq=int(qmax/dq)
 		if nq>nmax:
-			print "Coarsening q interval to reduce computational load"
+			print("Coarsening q interval to reduce computational load")
 			nq=nmax
 			dq=qmax/nq
 		nq2=int(2**0.5*nq)
-		print "Stepping space Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps."
+		print("Stepping space Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
 		FourPoint=np.zeros((nq2,self.Nsnap))
 		for u in range(self.Nsnap):
 			if (u%10==0):
-				print u
+				print (u)
 			smax=self.Nsnap-u
 			if self.Nvariable:
 				if self.tracer:
@@ -444,7 +444,7 @@ class Dynamics(Configuration):
 					# Should be real at that point
 					FourPoint[:,u]=np.real(np.sum(fourierrad*np.conjugate(fourierrad),axis=1))/(self.Ntracer*smax)
 				else:
-					print "Sorry: Four point function for dividing particles is ambiguous and currently not implemented!"
+					print("Sorry: Four point function for dividing particles is ambiguous and currently not implemented!")
 			else:
 				# First filter out the particles we are dealing with: only those that have moved less than distance a
 				#print "before distances"
@@ -496,7 +496,7 @@ class Dynamics(Configuration):
 	# I am *not* removing any dreaded rattlers, because they should be part of the whole thing. 
 	def projectModes(self,Hessian):
 		if self.Nvariable:
-			print "Hessians and dividing particles don't mix! Stopping here!"
+			print ("Hessians and dividing particles don't mix! Stopping here!")
 			self.proj=0
 			self.projv=0
 		else:
@@ -504,7 +504,7 @@ class Dynamics(Configuration):
 			self.proj=np.zeros((3*Hessian.N,self.Nsnap))
 			self.projv=np.zeros((3*Hessian.N,self.Nsnap))
 			#proj2=np.zeros((3*Hessian.N,self.Nsnap))
-			print Hessian.eigvec[0:3*Hessian.N:3,0]
+			print (Hessian.eigvec[0:3*Hessian.N:3,0])
 			#print Hessian.eigvec[0:3*Hessian.N:3,1]
 			# Check out what's going on here
 			for u in range(self.Nsnap):
@@ -546,7 +546,7 @@ class Dynamics(Configuration):
 	# I am *not* removing any dreaded rattlers, because they should be part of the whole thing. 
 	def projectModes2d(self,Hessian):
 		if self.Nvariable:
-			print "Hessians and dividing particles don't mix! Stopping here!"
+			print("Hessians and dividing particles don't mix! Stopping here!")
 			self.proj=0
 			self.projv=0
 		else:

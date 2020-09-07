@@ -2,8 +2,8 @@
 from Geometry import *
 from Interaction import *
 
-from read_param import *
-from read_data import *
+#from read_param import *
+from read_data_csv import *
 from CellList import *
 
 import sys,glob
@@ -27,7 +27,7 @@ class Configuration:
 		#print(' kwargs: ', kwargs)
 		self.initype = kwargs["initype"]
 		if self.initype == "fromCSV":
-			self.fromCSV(kwargs["parampath"],kwargs["datapath"],kwargs["multiopt"])
+			self.fromCSV(kwargs["param"],kwargs["datapath"],kwargs["multiopt"])
 		elif self.initype == "makeChild":
 			self.makeChild(kwargs["parentconf"],kwargs["frame"],kwargs["usetype"])
 		elif self.initype == "fromPython":
@@ -38,10 +38,11 @@ class Configuration:
 			
 			
 	# Use methods for the actual initialisation
-	def fromCSV(self,parampath,datapath,multiopt,ignore=True,debug=False):
+	def fromCSV(self,param,datapath,multiopt,ignore=True,debug=False):
 		self.debug = debug
-		self.param = Param(parampath)
+		self.param = param
 		self.datapath = datapath
+		print(self.datapath)
 		self.multiopt = multiopt
 		self.ignore = ignore
 		# Options for running mode the analysis
@@ -128,19 +129,42 @@ class Configuration:
 		self.makeCellList()
 		
 		
-	def readDataSingle(self,filename,internal=False,readtypes='all'):
+	def readDataSingle(self,filename,dialect,internal=False,readtypes='all'):
 		print("Processing file : " + filename)
-		data = ReadData(filename)
+		rd = ReadData(filename,dialect)
 		
-		# Positions and velocities: non-negotiable in a data set
-		x, y, z = np.array(data.data[data.keys['x']]), np.array(data.data[data.keys['y']]), np.array(data.data[data.keys['z']])
-		vx, vy, vz = np.array(data.data[data.keys['vx']]), np.array(data.data[data.keys['vy']]), np.array(data.data[data.keys['vz']])
-		
-		if 'type' in data.keys:
-			ptype0 = np.array(data.data[data.keys['type']])
+		# Using a pandas dataframe now
+		x0 = rd.data["x"]
+		x = rd.data["x"].to_numpy()
+		y = rd.data["y"].to_numpy()
+		# CCPy and others don't have z coordinate
+		if "z" in rd.data.columns:
+			z = rd.data["z"].to_numpy()
+		else:
+			z = np.zeros((len(x),))
+			
+		vx = rd.data["vx"].to_numpy()
+		vy = rd.data["vy"].to_numpy()
+		# CCPy and others don't have z coordinate
+		if "vz" in rd.data.columns:
+			vz = rd.data["vz"].to_numpy()
+		else:
+			vz = np.zeros((len(x),))
+			
+		nx = rd.data["nx"].to_numpy()
+		ny = rd.data["ny"].to_numpy()
+		# CCPy and others don't have z coordinate
+		if "nz" in rd.data.columns:
+			nz = rd.data["nz"].to_numpy()
+		else:
+			nz = np.zeros((len(x),))
+			
+		if "type" in rd.data.columns:
+			ptype0 = rd.data["type"].to_numpy()
 			if readtypes == 'all':
 				N = len(x)
 				ptype = ptype0
+				useparts = range(N)
 			else:
 				useparts=[]
 				for v in range(len(ptype0)):
@@ -164,32 +188,24 @@ class Configuration:
 		
 		rval = np.column_stack((x[useparts],y[useparts],z[useparts]))
 		vval = np.column_stack((vx[useparts],vy[useparts],vz[useparts]))
-		
-		# Attempt to read active force direction, else this is all 0
-		try:
-			nx, ny, nz = np.array(data.data[data.keys['nx']]), np.array(data.data[data.keys['ny']]), np.array(data.data[data.keys['nz']])
-		except KeyError:
-			nx, ny, nz = np.zeros(np.shape(x)),np.zeros(np.shape(y)),np.zeros(np.shape(z))
 		nval = np.column_stack((nx[useparts],ny[useparts],nz[useparts]))
 		
-		# Attempt to read radius, type and flag if present
-		# Set spatial scale sigma for the cell list builder
-		
-		if not 'radius' in data.keys: 
+		if not "radius" in rd.data.columns: 
 			radius = np.ones(N)
 			monodisperse=True
 			sigma = 1.0
 		else: 
-			radius0 = np.array(data.data[data.keys['radius']])	
+			radius0 = rd.data["radius"].to_numpy()
 			radius = radius0[useparts]
 			sigma = np.mean(radius)
 			monodisperse=False
 		
-		if 'flag' in data.keys:
-			flag0 = np.array(data.data[data.keys['flag']])
+		if "flag" in rd.data.columns:
+			flag0 = rd.data["flag"].to_numpy()
 			flag = flag0[useparts]
 		else:
 			flag = range(N)
+		
 			
 		# Do the rest of the configuration only if this is not part of a series of reading in data
 		if internal:
@@ -220,7 +236,7 @@ class Configuration:
 	# read in data based on the content of the folder
 	# readtypes is now a list (when it is not 'all'): Read data of these types, which contains the tracer options
 	# tracers is type = [2], cornea is types = [1, 2] 
-	def readDataMany(self,skip=0,step=1,howmany='all',Nvariable=False,readtypes = 'all'):
+	def readDataMany(self,dialect,skip=0,step=1,howmany='all',Nvariable=False,readtypes = 'all'):
 		self.Nvariable=Nvariable
 		try:
 			filepattern = self.param.dumpname
@@ -229,6 +245,8 @@ class Configuration:
 		files0 = sorted(glob.glob(self.datapath + filepattern + '*.dat'))
 		if len(files0) == 0:
   			files0 = sorted(glob.glob(self.datapath + filepattern + '*.dat.gz'))
+		if len(files0) == 0:
+  			files0 = sorted(glob.glob(self.datapath + filepattern + '*.csv'))
 		if len(files0) == 0:
 			print("Error: could not identify data file name pattern, does not end in .dat or .dat.gz, or is not part of parameters, and is not 'frame'. Stopping.")
 			sys.exit()
@@ -250,13 +268,13 @@ class Configuration:
 			u=0
 			for f in files:
 				#print "Pre - Processing file : ", f
-				data = ReadData(f)
-				x= np.array(data.data[data.keys['x']])
+				rd = ReadData(f,dialect)
+				x = rd.data["x"].to_numpy()
 				if readtypes == 'all':
 					self.Nval[u]=len(x)
 				else:
-					if 'type' in data.keys:
-						ptype = data.data[data.keys['type']]
+					if "type" in rd.data.columns:
+						ptype = rd.data["type"].to_numpy()
 						useparts = []
 						for v in range(len(ptype)):
 							if ptype[v] in readtypes:
@@ -272,7 +290,7 @@ class Configuration:
 				u+=1
 			self.N=int(np.amax(self.Nval))
 		else:
-			self.N,rval,vval,nval,radius,ptype,flag,self.sigma,monodisperse = self.readDataSingle(files[0],True,readtypes)
+			self.N,rval,vval,nval,radius,ptype,flag,self.sigma,monodisperse = self.readDataSingle(files[0],dialect,True,readtypes)
 			self.Nval=[self.N for i in range(self.Nsnap)]
 		print("Handling a total of maximum " + str(self.N) + " particles!")
 			
@@ -288,7 +306,7 @@ class Configuration:
 		for f in files:
 			# first read the data, for all types
 			#return N,rval,vval,nval,radius,ptype,flag,sigma,monodisperse
-			N,rval,vval,nval,radius,ptype,flag,sigma,monodisperse = self.readDataSingle(f,True,readtypes)
+			N,rval,vval,nval,radius,ptype,flag,sigma,monodisperse = self.readDataSingle(f,dialect,True,readtypes)
 			# Running tab on maximum particle size for CellList
 			if sigma>self.sigma:
 				self.sigma = sigma

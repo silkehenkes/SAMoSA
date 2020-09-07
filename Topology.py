@@ -31,6 +31,8 @@ class Topology(Configuration):
 		# attempt to compute the flow field between two snapshots, based on the uniquely labeled particles present in both
 		flag1=list(self.flag[inisnap,:self.Nval[inisnap]])
 		flag2=list(self.flag[inisnap+dsnap,:self.Nval[inisnap+dsnap]])
+		#print(flag1)
+		#print(flag2)
 		# intersection: do this manually, possibly easier ...
 		# labels in order for both
 		useparts1=[]
@@ -47,6 +49,7 @@ class Topology(Configuration):
 				if debug:
 					print("particle " + str(flag1[k1]) + " died.")
 				hasdied.append(k1)
+		#print(index)
 		
 		# Make this the actual displacement field
 		flowField = (self.rval[inisnap+dsnap,useparts2,:]-self.rval[inisnap,useparts1,:])
@@ -57,6 +60,7 @@ class Topology(Configuration):
 		for u in range(1,nsnap):
 			print(u)
 			flag2=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
+			#print(flag2)
 			useparts2=[]
 			for k in range(len(useparts1)):
 				k2 = flag2.index(index[k])
