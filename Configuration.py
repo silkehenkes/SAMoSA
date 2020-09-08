@@ -12,6 +12,7 @@ import sys,glob
 try:
 	import matplotlib.pyplot as plt
 	from mpl_toolkits.mplot3d import Axes3D
+	from matplotlib.pyplot import cm
 	HAS_MATPLOTLIB=True
 except:
 	HAS_MATPLOTLIB=False
@@ -80,8 +81,11 @@ class Configuration:
 		print("New sigma is " + str(self.sigma))
 		self.monodisperse = False
 		
-		#(self,param,sigma,ignore=False,debug=False):
-		self.inter=Interaction(self.param,self.radius,False,False)
+		
+		# Generating new interaction assuming that it's not monodisperse and contains a single k
+		#def __init__(self,param,sigma,ignore=False,debug=False):
+		self.inter=Interaction(self.param,self.sigma,True,False)
+		print (param.box)
 		self.geom=geometries[param.constraint](param)
 		self.makeCellList()
 		
@@ -121,10 +125,11 @@ class Configuration:
 		vnorm = np.sqrt(self.vval[:,0]**2 + self.vval[:,1]**2+self.vval[:,2]**2)
 		self.vhat = self.vval / np.outer(vnorm,np.ones((3,)))
 		
-		# is that passing a pointer? Or should I make some new ones instead?
-		#self.inter=Interaction(self.param,monodisperse,self.radius,self.ignore)
+		# Generating new interaction assuming that it's not monodisperse and contains a single k
+		#def __init__(self,param,sigma,ignore=False,debug=False):
+		self.inter=Interaction(self.param,self.sigma,False,True)
 		#self.geom=geometries[param.constraint](param)
-		self.inter = parentconf.inter
+		#self.inter = parentconf.inter
 		self.geom = parentconf.geom
 		self.makeCellList()
 		
@@ -362,7 +367,7 @@ class Configuration:
 		try:
 			cellsize=param.nlist_rcut
 		except:
-			cellsize = 3*self.sigma
+			cellsize = 2*self.sigma
 		if cellsize>5*self.sigma:
 			cellsize=5*self.sigma
 			print("Warning! Reduced the cell size to manageable proportions (5 times mean radius). Re-check if simulating very long objects!")
@@ -371,7 +376,6 @@ class Configuration:
 		if self.multiopt=="single":
 			for k in range(self.N):
 				self.clist.add_particle(self.rval[k,:],k)
-				
 		else:
 			for k in range(self.Nval[frame]):
 				self.clist.add_particle(self.rval[frame,k,:],k)
@@ -413,19 +417,43 @@ class Configuration:
 			self.makeCellList(frame)
 			
 	# get neighbours of a particle
-	def getNeighbours(self,i,mult=1.0,dmax="default",frame=1):
+	# Issues with particle on top of each other, usually beacuse of sloppy implementation of glued boundary conditions
+	# Remove them at the source, with a warning
+	def getNeighbours(self,i,mult=1.0,dmax="default",frame=1,eps=1e-8):
+		#print('particle:' + str(i))
+		#print('mult:' + str(mult))
+		#print('dmax:' + str(dmax))
 		if dmax =="default":
 			dmax = 2*self.sigma
 		# Find potential neighbours from neighbour list first
 		if self.multiopt=="single":
 			cneighbours=self.clist.get_neighbours(self.rval[i,:])
+			cneighbours.remove(i)
 			#print "Cell list neighbours: " + str(len(cneighbours))
 			drvec0=self.geom.ApplyPeriodic2d(self.rval[cneighbours,:]-self.rval[i,:])
 		else:
 			cneighbours=self.clist.get_neighbours(self.rval[frame,i,:])
+			cneighbours.remove(i)
 			#print "Cell list neighbours: " + str(len(cneighbours))
 			drvec0=self.geom.ApplyPeriodic2d(self.rval[frame,cneighbours,:]-self.rval[frame,i,:])
 		dist=np.sqrt(drvec0[:,0]**2+drvec0[:,1]**2+drvec0[:,2]**2)
+		# Remove on top if there. Unpleasant slowdown. 
+		ontop = [index for index, value in enumerate(dist) if value < eps]
+		if len(ontop)>0:
+			print('ontop:'+str(ontop))
+			#print('cneighbours:'+str(cneighbours))
+			for o in ontop:
+				cneighbours.pop(o)
+			#print('cneighbours:'+str(cneighbours))
+			# remove and recompute
+			if self.multiopt=="single":
+				drvec0=self.geom.ApplyPeriodic2d(self.rval[cneighbours,:]-self.rval[i,:])
+			else:
+				drvec0=self.geom.ApplyPeriodic2d(self.rval[frame,cneighbours,:]-self.rval[frame,i,:])
+			dist=np.sqrt(drvec0[:,0]**2+drvec0[:,1]**2+drvec0[:,2]**2)
+			#print('dist:'+str(dist))
+		#print('cneighbours:' + str(cneighbours))
+		#print('drvec0'+ str(drvec0))
 		#dist=self.geom.GeodesicDistance12(self.rval[cneighbours,:],self.rval[i,:])
 		#print "Mean cutoff: " + str(mult*dmax)
 		if self.monodisperse: 
@@ -441,17 +469,16 @@ class Configuration:
 				neighbours=[cneighbours[index] for index,value in enumerate(dist) if value < mult*(self.radius[frame,i]+self.radius[frame,cneighbours[index]])]
 				radi = self.radius[frame,i]
 				radj = self.radius[frame,neighbours]
-		## Stupid one for debugging purposes:
-		#dist=self.geom.GeodesicDistance12(self.rval,self.rval[i,:])
-		#neighbours = [index for index, value in enumerate(dist) if value < mult*(self.radius[i]+self.radius[index])]
-		neighbours.remove(i)
-		#print "Contact neighbours: " + str(len(neighbours))
 		#print neighbours
 		if self.multiopt=="single":
 			drvec=self.geom.ApplyPeriodic2d(self.rval[neighbours,:]-self.rval[i,:])
 		else:
 			drvec=self.geom.ApplyPeriodic2d(self.rval[frame,neighbours,:]-self.rval[frame,i,:])
 		#dr=np.sqrt(drvec[:,0]**2+drvec[:,1]**2+drvec[:,2]**2)
+		#print('neighbours:' + str(neighbours))
+		#print('drvec:' + str(drvec))
+		#print('radi:' + str(radi))
+		#print('radj:' + str(radj))
 		return neighbours, drvec, radi, radj
 	      
 	def compute_energy_and_pressure(self,frame=1):

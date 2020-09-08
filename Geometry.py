@@ -85,23 +85,46 @@ class Geometry(object):
 		return dr
 	 
 	# rather use these ones, kill the other ones eventually
-	def ApplyPeriodic1d(self,dr):
-		dr[0]-=self.Lx*np.round(dr[0]/self.Lx)
-		dr[1]-=self.Ly*np.round(dr[1]/self.Ly)
-		dr[2]-=self.Lz*np.round(dr[2]/self.Lz)
-		return dr
-	
-	def ApplyPeriodic2d(self,dr):
-		dr[:,0]-=self.Lx*np.round(dr[:,0]/self.Lx)
-		dr[:,1]-=self.Ly*np.round(dr[:,1]/self.Ly)
-		dr[:,2]-=self.Lz*np.round(dr[:,2]/self.Lz)
-		return dr
+	# Be careful about passing by reference ...
+	def ApplyPeriodic1d(self,dr,replace=True):
+		if replace:
+			dr[0]-=self.Lx*np.round(dr[0]/self.Lx)
+			dr[1]-=self.Ly*np.round(dr[1]/self.Ly)
+			dr[2]-=self.Lz*np.round(dr[2]/self.Lz)
+			return dr
+		else:
+			dr0 = np.zeros(np.shape(dr))
+			dr0[0]-=self.Lx*np.round(dr[0]/self.Lx)
+			dr0[1]-=self.Ly*np.round(dr[1]/self.Ly)
+			dr0[2]-=self.Lz*np.round(dr[2]/self.Lz)
+			return dr0
 		
-	def ApplyPeriodic3d(self,dr):
-		dr[:,:,0]-=self.Lx*np.round(dr[:,:,0]/self.Lx)
-		dr[:,:,1]-=self.Ly*np.round(dr[:,:,1]/self.Ly)
-		dr[:,:,2]-=self.Lz*np.round(dr[:,:,2]/self.Lz)
-		return dr
+	
+	def ApplyPeriodic2d(self,dr,replace=True):
+		if replace:
+			dr[:,0]-=self.Lx*np.round(dr[:,0]/self.Lx)
+			dr[:,1]-=self.Ly*np.round(dr[:,1]/self.Ly)
+			dr[:,2]-=self.Lz*np.round(dr[:,2]/self.Lz)
+			return dr
+		else:
+			dr0 = np.zeros(np.shape(dr))
+			dr0[:,0]-=self.Lx*np.round(dr[:,0]/self.Lx)
+			dr0[:,1]-=self.Ly*np.round(dr[:,1]/self.Ly)
+			dr0[:,2]-=self.Lz*np.round(dr[:,2]/self.Lz)
+			return dr0
+		
+	def ApplyPeriodic3d(self,dr,replace=True):
+		if replace:
+			dr[:,:,0]-=self.Lx*np.round(dr[:,:,0]/self.Lx)
+			dr[:,:,1]-=self.Ly*np.round(dr[:,:,1]/self.Ly)
+			dr[:,:,2]-=self.Lz*np.round(dr[:,:,2]/self.Lz)
+			return dr
+		else:
+			dr0 = np.zeros(np.shape(dr))
+			dr0[:,:,0]-=self.Lx*np.round(dr[:,:,0]/self.Lx)
+			dr0[:,:,1]-=self.Ly*np.round(dr[:,:,1]/self.Ly)
+			dr0[:,:,2]-=self.Lz*np.round(dr[:,:,2]/self.Lz)
+			return dr0
 	  
 	# Sigh, looks like we need some specific x, y and z ones as well ...
 	def ApplyPeriodicX(self,dr):

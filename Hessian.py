@@ -17,9 +17,9 @@ class Hessian:
 		self.rattlers=rattlers
 		self.N=self.conf.N
 		self.Nrigid=self.N-len(rattlers)
-		self.geom=geom
 		#self.inter=self.conf.inter
 		self.debug=debug
+		print("Checking for wrap: " + str(np.amin(self.conf.rval[:,0])))
 	
 	def setRattlers(rattlers):
 		self.rattlers = rattlers
@@ -27,7 +27,7 @@ class Hessian:
         
 	
 	# This needs to be one of the single-frame configurations, create check for it
-	def makeMatrix(self,dim=2,addRestoring=True,ksurf=10.0):
+	def makeMatrix(self,dim=2,fixBorder=True,btype = 2,typeweights = 'none',addRestoring=True,ksurf=10.0,addCurvature=False):
 		# Dimensions of the problem
 		self.dim = dim
 		# Check what dimension we are after
@@ -69,9 +69,19 @@ class Hessian:
 				neighbours, drvec, radi, radj = self.conf.getNeighbours(i,self.conf.inter.getMult(),self.conf.inter.getDmax())
 				# particle distances and contact normal vectors
 				dr =np.sqrt(drvec[:,0]**2+drvec[:,1]**2+drvec[:,2]**2)
+				# temporary junc, wait until fix from Tim
+				ontop = [index for index, value in enumerate(dr) if value < 1e-8]
+				if len(ontop)>0:
+					print (i)
+					print (ontop)
+					print(neighbours)
+					print (dr)
+				#print(ontop)
 				nij=np.transpose(np.transpose(drvec)/np.transpose(dr))
-				# Forces
+				nij[ontop,:] = np.zeros((len(ontop),3))
+				# Forces (overlap taken care of)
 				fvec=self.conf.inter.getForce(i,neighbours,drvec,radi,radj)
+				#print(fvec)
 				fsum+=sum(fvec)
 				# Projected onto the contact normal
 				fval=np.sum(fvec*nij,axis=1)
@@ -85,6 +95,19 @@ class Hessian:
 					# Alright: elements are labeled as follows: Contact ij has sub-square 3i, 3i+1, 3i+2 and 3j, 3j+1, 3j+2
 					diagsquare=np.zeros((3,3))
 					for j in range(len(neighbours)):
+						# get normalisation factor 1/sqrt(m_i m_j). 
+						# Allow for a prefactor. Typical use: weigh down boundary particles to  make them effectively immobile.
+						if not typeweights == 'none':
+							twi = typeweights[int(self.conf.ptype[i])-1]
+							twj = typeweights[int(self.conf.ptype[neighbours[j]])-1]
+							# based on cylinder or disk geometry
+							mi = np.pi*radi**2*twi
+							mj = np.pi*radj[j]**2*twj
+							weij = 1.0/(mi*mj)**0.5
+							weii = 1.0/mi
+						else:
+							weii = 1.0
+							weij = 1.0
 						n=nij[j,:]
 						N=Normal[neighbours[j],:]
 						subsquare=np.zeros((3,3))
@@ -102,7 +125,7 @@ class Hessian:
 						subsquare[2,2]=-fval[j]/dr[j]*(1-n[2]*n[2]-N[2]*N[2])+kij[j]*n[2]*n[2]
 						# Stick into the big matrix
 						label=neighbours[j]
-						self.Hessian[3*i:(3*i+3),3*label:(3*label+3)]=-subsquare
+						self.Hessian[3*i:(3*i+3),3*label:(3*label+3)]=-subsquare*weij
 						# Add the required bits to the diagonal part of the matrix
 						# xx, xy and xz
 						diagsquare[0,0]+=fval[j]/dr[j]*(1-n[0]*n[0]-N[0]*N[0])-kij[j]*n[0]*n[0]
@@ -134,27 +157,39 @@ class Hessian:
 							diagsquare[2,1]+=-fval[j]/Rval*n[1]*N[2]
 							diagsquare[2,2]+=-fval[j]/Rval*n[2]*N[2]
 						
-						if (addRestoring):
-							# Manual restoring force along the normal
-							#ksurf=10
-							diagsquare[0,0]+=-ksurf*N[0]*N[0]
-							diagsquare[0,1]+=-ksurf*N[1]*N[0]
-							diagsquare[0,2]+=-ksurf*N[2]*N[0]
-							# yx, yy and yz
-							diagsquare[1,0]+=-ksurf*N[0]*N[1]
-							diagsquare[1,1]+=-ksurf*N[1]*N[1]
-							diagsquare[1,2]+=-ksurf*N[2]*N[1]
-							# zx, zy and zz
-							diagsquare[2,0]+=-ksurf*N[0]*N[2]
-							diagsquare[2,1]+=-ksurf*N[1]*N[2]
-							diagsquare[2,2]+=-ksurf*N[2]*N[2]
+					if (addRestoring):
+						# Manual restoring force along the normal
+						#ksurf=10
+						diagsquare[0,0]+=-ksurf*N[0]*N[0]
+						diagsquare[0,1]+=-ksurf*N[1]*N[0]
+						diagsquare[0,2]+=-ksurf*N[2]*N[0]
+						# yx, yy and yz
+						diagsquare[1,0]+=-ksurf*N[0]*N[1]
+						diagsquare[1,1]+=-ksurf*N[1]*N[1]
+						diagsquare[1,2]+=-ksurf*N[2]*N[1]
+						# zx, zy and zz
+						diagsquare[2,0]+=-ksurf*N[0]*N[2]
+						diagsquare[2,1]+=-ksurf*N[1]*N[2]
+						diagsquare[2,2]+=-ksurf*N[2]*N[2]
 					#print diagsquare
-					self.Hessian[3*i:(3*i+3),3*i:(3*i+3)]=-diagsquare
+					self.Hessian[3*i:(3*i+3),3*i:(3*i+3)]=-diagsquare*weii
 				else:
 					diagsquare=np.zeros((2,2))
 					for j in range(len(neighbours)):
+						# get normalisation factor 1/sqrt(m_i m_j). 
+						# Allow for a prefactor. Typical use: weigh down boundary particles to  make them effectively immobile.
+						if not typeweights == 'none':
+							twi = typeweights[int(self.conf.ptype[i])-1]
+							twj = typeweights[int(self.conf.ptype[neighbours[j]])-1]
+							# based on cylinder or disk geometry
+							mi = np.pi*radi**2*twi
+							mj = np.pi*radj[j]**2*twj
+							weij = 1.0/(mi*mj)**0.5
+							weii = 1.0/mi
+						else:
+							weii = 1.0
+							weij = 1.0
 						n=nij[j,:]
-						N=Normal[neighbours[j],:]
 						subsquare=np.zeros((2,2))
 						# xx, xy and xz
 						subsquare[0,0]=-fval[j]/dr[j]*(1-n[0]*n[0])+kij[j]*n[0]*n[0]
@@ -164,7 +199,7 @@ class Hessian:
 						subsquare[1,1]=-fval[j]/dr[j]*(1-n[1]*n[1])+kij[j]*n[1]*n[1]
 						# Stick into the big matrix
 						label=neighbours[j]
-						self.Hessian[2*i:(2*i+2),2*label:(2*label+2)]=-subsquare
+						self.Hessian[2*i:(2*i+2),2*label:(2*label+2)]=-subsquare*weij
 						# Add the required bits to the diagonal part of the matrix
 						# xx, xy and xz
 						diagsquare[0,0]+=fval[j]/dr[j]*(1-n[0]*n[0])-kij[j]*n[0]*n[0]
@@ -172,11 +207,21 @@ class Hessian:
 						# yx, yy and yz
 						diagsquare[1,0]+=fval[j]/dr[j]*(0-n[1]*n[0])-kij[j]*n[1]*n[0]
 						diagsquare[1,1]+=fval[j]/dr[j]*(1-n[1]*n[1])-kij[j]*n[1]*n[1]
+						# Add a steep personal potential well for each border particle to fix it in place
+						# This gives border particles positive modes. Scale with the ratio of typeweights to cancel out other ones.
+						# And add the factor of 3 to shift those eigenvalues above all the other ones.
+					if fixBorder:
+						if self.conf.ptype[i]==btype:
+							keff=3*np.mean(kij)/weii
+							diagsquare[0,0]+= -keff
+							diagsquare[1,1]+= -keff
 					#print diagsquare
-					self.Hessian[2*i:(2*i+2),2*i:(2*i+2)]=-diagsquare
+					self.Hessian[2*i:(2*i+2),2*i:(2*i+2)]=-diagsquare*weii
 		fav/=self.N
 		print("Hessian: Estimating distance from mechanical equilibrium of initial configuration ")
 		print("Scaled force sum is " + str(fsum/fav))
+		# checking for nans
+		
 			
 	def getModes(self):
 		# Let's have a look if what we get is in any way reasonable
@@ -193,7 +238,7 @@ class Hessian:
 		print("Starting Diagonalisation!")
 		self.eigval, self.eigvec = LA.eigh(HessianSym)
 		print("The smallest eigenvalue is: " + str(np.amin(self.eigval)))
-		print(self.eigval)
+		#print(self.eigval)
 		# Crosscheck on sanity
 		if self.dim == 3:
 			wx=np.zeros((self.N,))
@@ -209,9 +254,9 @@ class Hessian:
 				plt.figure()
 				eigrank=np.linspace(0,3*self.N,3*self.N)
 				plt.plot(eigrank,self.eigval,'.-')
-				print (wx)
-				print (wy)
-				print (wz)
+				#print (wx)
+				#print (wy)
+				#print (wz)
 			return wx,wy,wz
 		else:
 			wx=np.zeros((self.N,))
@@ -225,9 +270,43 @@ class Hessian:
 				plt.figure()
 				eigrank=np.linspace(0,2*self.N,2*self.N)
 				plt.plot(eigrank,self.eigval,'.-')
-				print (wx)
-				print (wy)
+				#print (wx)
+				#print (wy)
 			return wx,wy
+		
+	# Unlike its 3d equivalent, this is more of a debugging situation
+	def plotModes2d(self,modelabels,omegamax=3.0,npts=100):
+		plt.figure()
+		n = np.ceil(len(modelabels)**0.5)
+		ct = 1
+		for u in modelabels:
+			xix = self.eigvec[0:2*self.N:2,u]
+			xiy = self.eigvec[1:2*self.N:2,u]
+			ax = plt.subplot(n,n,ct)
+			ax.quiver(self.conf.rval[:,0],self.conf.rval[:,1],xix,xiy)
+			ax.set_title('Eigenvector rank ' + str(u) + ' with eigenvalue ' + str(self.eigval[u]))
+			ct+=1
+		# something off with the PBCs
+		print("Checking for wrap: " + str(np.amin(self.conf.rval[:,0])))
+			
+		# For this histogram and only this histogram: replace negative eigenvalues by zeros
+		eigplot=self.eigval
+		badlist=list(np.where(eigplot<0.0)[0])
+		eigplot[badlist]=0.0
+		omega=np.real(np.sqrt(eigplot))
+		ombin=np.linspace(0,omegamax,npts)
+		dom=ombin[1]-ombin[0]
+		omhist, bin_edges = np.histogram(omega,bins=ombin)
+		omlabel=(np.round(omega/dom)).astype(int)
+					
+		plt.figure()
+		plt.plot(ombin[1:]-dom/2,omhist,'o-k',label='DOS')
+		plt.xlim(0,omegamax)
+		plt.xlabel('omega')
+		plt.ylabel('D(omega)')
+		plt.title('Density of states')
+		
+		
 			
 		
 	def plotModes3d(self,omegamax=3.0,npts=100):

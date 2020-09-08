@@ -30,6 +30,28 @@ class Dynamics(Configuration):
 				self.drift[u,:]=self.drift[u-1,:]+drift0
 				#print self.drift[u,:]
 			
+	# Compute average positions and create a sub-configuration to feed to the Hessian
+	def makeAverageChild(self,usetype):
+		if self.Nvariable:
+			print("Dynamics:: Variable N: Taking average particle positions is unsound. Stopping.")
+			sys.exit()
+		# If that's out of the way, nothing is being relabeled. These are our labels once and for all
+		useparts = self.getUseparts(usetype,0)
+		# This is the crucial one for the Hessian
+		rval0 = np.mean(self.rval[:,useparts,:],axis=0)
+		# Less meaningful, but indulge me
+		vval0 = np.mean(self.vval[:,useparts,:],axis=0)
+		nval0 = np.mean(self.nval[:,useparts,:],axis=0)
+		# This part is not changing, hence use initial
+		radius0 = self.radius[0,useparts]
+		ptype0 = self.ptype[0,useparts]
+		flag0 = self.flag[0,useparts]
+		
+		#self.fromPython(kwargs["param"],kwargs["rval"],kwargs["vval"],kwargs["nval"],kwargs["radii"],kwargs["ptype"],kwargs["flag"])
+		#def fromPython(self,param,rval,vval,nval,radius,ptype,flag):
+		averageChild = Configuration(initype="fromPython",param=self.param,rval=rval0,vval=vval0,nval=nval0,radii=radius0,ptype=ptype0,flag=flag0)
+		return averageChild
+		
 	# Tracking a subset of particles: This identifies the relevant ones
 	# and gives an error if that number changes or the flags don't match
 	# complicated: if the particles we are aiming to track move around in their list index
@@ -494,7 +516,7 @@ class Dynamics(Configuration):
 	# we will need self.eigval and self.eigvec
 	# I assume that the global skip has already taken care of any of the transient stuff
 	# I am *not* removing any dreaded rattlers, because they should be part of the whole thing. 
-	def projectModes(self,Hessian):
+	def projectModes3d(self,Hessian):
 		if self.Nvariable:
 			print ("Hessians and dividing particles don't mix! Stopping here!")
 			self.proj=0
@@ -544,6 +566,7 @@ class Dynamics(Configuration):
 	# we will need self.eigval and self.eigvec
 	# I assume that the global skip has already taken care of any of the transient stuff
 	# I am *not* removing any dreaded rattlers, because they should be part of the whole thing. 
+	# Getting rid of boundary particles in the projections
 	def projectModes2d(self,Hessian):
 		if self.Nvariable:
 			print("Hessians and dividing particles don't mix! Stopping here!")
@@ -560,31 +583,19 @@ class Dynamics(Configuration):
 			transcomp=np.zeros((self.Nsnap,3))
 			velcomp=np.zeros((self.Nsnap,3))
 			for u in range(self.Nsnap):
-                                # None of this works: either keep it all, or take it all off
-                                #takeoff=np.einsum('j,k->jk',np.ones((self.N,)),self.drift[u,:])
-                                #rnew=self.rval[u,:,:]-takeoff
-                                #ourmean = np.mean(rnew)
-                                #hessmean= np.mean(Hessian.rval)
-                                #hessnew=Hessian.rval-hessmean+ourmean
-                                #print ourmean
-                                #print np.mean(hessnew)
 				#dr=self.geom.ApplyPeriodic2d(rnew-hessnew)
-				dr=self.geom.ApplyPeriodic2d(self.rval[u,:,:]-Hessian.rval)
-				transcomp[u,:]=np.mean(dr,axis=0)
-				dr-=np.mean(dr,axis=0)
-				#print np.mean(dr)
-				# aah. modulo periodic boundary conditions
+				if self.geom.periodic:
+					dr=self.geom.ApplyPeriodic2d(self.rval[u,:,:]-Hessian.conf.rval)
+				else:
+					dr = self.rval[u,:,:]-Hessian.conf.rval
 				dv=self.vval[u,:,:]
-				velcomp[u,:]=np.mean(dv,axis=0)
-				# serious WTF
 				# now project onto the modes
 				# This is the organisation of our matrix
 				#plt.quiver(self.rval[:,0],self.rval[:,1],self.eigvec[0:3*self.N:3,u],self.eigvec[1:3*self.N:3,u])
 				# By definition, we are just ignoring the third dimension here
 				self.proj[:,u]=1.0*(np.einsum('i,ij->j',dr[:,0],Hessian.eigvec[0:2*Hessian.N:2,:]) + np.einsum('i,ij->j',dr[:,1],Hessian.eigvec[1:2*Hessian.N:2,:]))
 				self.projv[:,u]=1.0*(np.einsum('i,ij->j',dv[:,0],Hessian.eigvec[0:2*Hessian.N:2,:]) + np.einsum('i,ij->j',dv[:,1],Hessian.eigvec[1:2*Hessian.N:2,:]))
-				#for v in range(3*Hessian.N):
-					#proj2[v,u]=np.sum(dr[:,0]*Hessian.eigvec[0:3*Hessian.N:3,u]) + np.einsum('i,ij->j',dr[:,1],Hessian.eigvec[1:3*Hessian.N:3,:])
+				
 			# projection normalization
 			self.proj/=self.Nsnap
 			self.projv/=self.Nsnap
@@ -595,56 +606,57 @@ class Dynamics(Configuration):
 			
 	def plotProjections(self,Hessian,nmodes=5):
 	  
-		multmap=LinearSegmentedColormap('test',cdict,N=nmodes) 
+		color=iter(cm.rainbow(np.linspace(0,1,nmodes)))
+		#multmap=LinearSegmentedColormap('test',cdict,N=nmodes) 
 		tval=np.linspace(0,self.Nsnap-1,self.Nsnap)
 		plt.figure()
 		for u in range(nmodes):
-			plt.plot(tval,self.proj[u,:],'.-',color=multmap(u),label='mode '+str(u))
-		plt.legend()
+			c=next(color)
+			plt.plot(tval,self.proj[u,:],'.-',color=c,label='mode '+str(u))
+		if nmodes<10:
+			plt.legend()
 		plt.xlabel('time')
 		plt.ylabel('projection')
 		plt.title('Displacements')
 		
+		color=iter(cm.rainbow(np.linspace(0,1,nmodes)))
 		plt.figure()
 		for u in range(nmodes):
-			plt.plot(tval,self.projv[u,:],'.-',color=multmap(u),label='mode '+str(u))
-		plt.legend()
+			c=next(color)
+			plt.plot(tval,self.projv[u,:],'.-',color=c,label='mode '+str(u))
+		if nmodes<10:
+			plt.legend()
 		plt.xlabel('time')
 		plt.ylabel('projection')
 		plt.title('Velocities')
 		  
 		
-		tau=1.0/float(self.param.nu)
-		v=float(self.param.v0)
-		
+		omega = np.sqrt(np.abs(Hessian.eigval))
 		plt.figure()
-		plt.loglog(Hessian.eigval,0.5*Hessian.eigval*self.proj2av,'.-r',label='projection')
-		# directly add the prediction here
-		plt.loglog(Hessian.eigval,v**2*tau/(4.0*(1.0+Hessian.eigval*tau)),'-k',label='prediction')
-		plt.xlabel(r'$\lambda$')
+		plt.plot(omega,0.5*Hessian.eigval*self.proj2av,'.-r',label='projection')
+		plt.xlabel(r'$\omega$')
 		plt.ylabel('Energy')
 		plt.xlim(0,12)
 		#plt.ylim(1e-10,1e-5)
-		plt.title('Energy from displacement projections, v0=' + str(self.param.v0)+ ' tau=' + str(tau))
+		plt.title('Energy from displacement projections')
 		
 		plt.figure()
-		plt.loglog(Hessian.eigval,self.proj2av,'o-r',label='displacements')
-		plt.loglog(Hessian.eigval,self.projv2av,'o-g',label='velocities')
-		plt.xlabel(r'$\lambda$')
+		plt.plot(omega,self.proj2av/np.sum(self.proj2av),'.-r',label='displacements')
+		plt.xlabel(r'$\omega$')
 		plt.ylabel('projection square')
 		#plt.xlim(-0.01,12)
 		plt.legend()
-		plt.title('Square projections, v0=' + str(self.param.v0)+ ' tau=' + str(tau))
-		
+		plt.title('Square projections (normalised)')
 		
 		plt.figure()
-		plt.semilogy(Hessian.eigval,Hessian.eigval**2*self.proj2av,'o-r',label='displacements')
-		plt.semilogy(Hessian.eigval,self.projv2av,'o-g',label='velocitites')
-		plt.xlabel(r'$\lambda$')
-		plt.ylabel('velocity projections (expected)')
-		plt.xlim(-0.01,12)
+		plt.plot(omega,self.projv2av/np.sum(self.projv2av),'.-g',label='velocities')
+		plt.xlabel(r'$\omega$')
+		plt.ylabel('projection square')
+		#plt.xlim(-0.01,12)
 		plt.legend()
-		plt.title('Square velocity projections, v0=' + str(self.param.v0)+ ' tau=' + str(tau))
+		plt.title('Square projections (normalised)')
+		
+		
 		
 		
 			

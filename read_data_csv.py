@@ -42,7 +42,6 @@ class ReadData:
 	# Read data using pandas. Simplify data structure for Configuration
 	def __read_data(self):
 		# This outputs a dataframe as is
-		# elif dialect == "SAMoS": ... make sure it can deal with the leading #
 		if self.dialect == "SAMoS":
 			# this has a # in front of the header, and I cannot seem to tell python to disregard it (and not come up as 'unnamed')
 			# as a result, all the columns labels are shifted one to the left
@@ -53,7 +52,7 @@ class ReadData:
 				colshift[temp[u]] = temp[u+1]
 			self.data.rename(columns = {temp[len(temp)-1]: 'garbage'},inplace=True)
 			self.data.rename(columns = colshift,inplace=True,errors="raise")
-			print(self.data.columns)
+			#print(self.data.columns)
 		elif self.dialect == "CCCPy":
 			self.data = pandas.read_csv(self.datafile,header=0)
 			# look of the header
@@ -61,11 +60,9 @@ class ReadData:
 			# We need to muck about with the headers to distil this to a unified format
 			# Classical samos header:
 			#  id  type  flag  radius  x  y  z  vx  vy  vz  nx  ny  nz 
-			print(self.data.columns)
 			self.data.rename(columns={"xPos": "x", "yPos": "y", "xVel": "vx", "yVel": "vy", "xPol": "nx", "yPol": "ny", "rad":"radius", "glued":"type"}, inplace=True,errors="raise")
-			print(self.data.columns)
+			#print(self.data.columns)
 		else:
 			print("Unknown data format dialect!")
-		print(self.data)
 		
 

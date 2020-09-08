@@ -15,6 +15,7 @@ class Interaction:
 		print(self.param.ntypes)
 		print(self.ignore)
 		# First step: unpack parameters to find out what kind of types we have, and what kind of potentials
+		# Ignore is for cornea or crowds, where despite different types, they all have the same stiffnesses
 		if ((self.param.ntypes==1) or (self.ignore)):
 			if self.param.potential=='soft':
 				self.k=self.param.pot_params['k']
@@ -58,16 +59,17 @@ class Interaction:
 	def getMult(self):
 		return self.mult
 		
-	# also is -gradient potential	
-	def getForce(self,i,neighbours,drvec,radi,radj):
+	# also is -gradient potential
+	# Manually remove issues of particles on top of each other. Cause is usually sloppy implementation of glued boundaries.
+	def getForce(self,i,neighbours,drvec,radi,radj,eps=1e-8):
 		Fvec=0.0*(np.array(neighbours).transpose()*(drvec).transpose()).transpose()
 		dr=np.sqrt(drvec[:,0]**2+drvec[:,1]**2+drvec[:,2]**2)
+		ontop = [index for index, value in enumerate(dr) if value < eps]
 		if ((self.param.ntypes==1) or (self.ignore==True)):
 			if self.param.potential=='soft':	
 				diff=radi+radj-dr
 				fact = 0.5*self.k*diff
 				Fvec=self.k*((diff/dr).transpose()*(drvec).transpose()).transpose()
-				return Fvec
 			elif self.param.potential=='soft_attractive':
 				scale=radi+radj
 				diff=scale-dr
@@ -82,24 +84,25 @@ class Interaction:
 				# attractive ones
 				factor[att]=-self.k*(self.rmax*scale[att]-dr[att])
 				Fvec=((factor/dr).transpose()*(drvec).transpose()).transpose()
-				return Fvec
 			elif self.param.potential=='morse':
 				fnorm=-2*self.a*self.D*np.exp(-self.a*(dr-self.re))*(1-np.exp(-self.a*(dr-self.re)))
 				Fvec=((fnorm/dr).transpose()*(drvec).transpose()).transpose()
-				return Fvec
 			elif self.param.potential=='gaussian':
 				print("Warning! Gaussian interaction has not yet been implemented! Returning zero force")
-				return Fvec
 			elif self.param.potential=='rod':
 				print("Warning! Rod interaction has not yet been implemented! Returning zero force")
-				return Fvec
 			else:
 				print("Warning! Unknown interaction type! Returning zero force")
-				return Fvec
 		else:
 			# Do the Morse right now only ... will serve as a template
 			print("Warning! Multiple types of particles interacting have not yet been implemented! Returning zero force")
-			return Fvec
+		if len(ontop)>0:
+			print("Warning: Found particles on top of each other. Setting force to 0 here: ")
+			print (i,neighbours[ontop[0]])
+			for o in ontop:
+				Fvec[o,:]=np.zeros((3,))
+			print(Fvec)
+		return Fvec
 				
 	def getStresses(self,i,neighbours,drvec,radi,radj):
 		# Do these all the standard way, including the pressure as trace of the matrix

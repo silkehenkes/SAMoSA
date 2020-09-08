@@ -27,8 +27,14 @@ class Param:
 				self.constraint = 'plane_periodic'
 			Lx = float(paramdict['L_x']) 
 			Ly = float(paramdict['L_y']) 
+			# This box is too tight?
+			if not self.periodic:
+				Lx = Lx + 5
+				Ly = Ly + 5
 			# put into a box to be compatible with samos convention
-			self.box = [Lx,Ly,0]
+			# Note height ("corridor?"). Just important it's not zero
+			# Has to be larger than rcut
+			self.box = [Lx,Ly,5.0]
 			# and because that appears to be used as well ... cleanup
 			self.lx = Lx
 			self.ly = Ly

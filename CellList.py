@@ -45,7 +45,7 @@ class CellList:
 		self.dz = self.geom.Lz/float(self.nz)
 		# total number of cells
 		n_cell = self.nx*self.ny*self.nz
-		print("Created CellList with " + str(n_cell) + " boxes.")
+		print("Created CellList with " + str(n_cell) + " boxes, as nx=" + str(self.nx) + ', ny=' + str(self.ny) + ', nz=' + str(self.nz))
 		# Cell list is a python list
 		self.cell_list = [None for i in range(n_cell)]
 		for i in range(self.nx):
@@ -68,7 +68,7 @@ class CellList:
 		for ix in range(-1,2):
 			for iy in range(-1,2):
 				for iz in range(-1,2):
-					dobox=True
+					dobox = True
 					iix, iiy, iiz = i + ix, j + iy, k + iz
 					if (iix == self.nx): 
 						if self.geom.periodic:
@@ -112,9 +112,10 @@ class CellList:
 			
 	# Get the cell label for a given position vector v
 	def get_cell_idx(self, rval):
-		rval=self.geom.ApplyPeriodic1d(rval)
+		# This effing thing is being modified inside!
+		rval0=self.geom.ApplyPeriodic1d(rval,replace=False)
 		xmin, ymin, zmin = -0.5*self.geom.Lx, -0.5*self.geom.Ly, -0.5*self.geom.Lz
-		i, j, k = int((rval[0]-xmin)/self.dx), int((rval[1]-ymin)/self.dy), int((rval[2]-zmin)/self.dz) 
+		i, j, k = int((rval0[0]-xmin)/self.dx), int((rval0[1]-ymin)/self.dy), int((rval0[2]-zmin)/self.dz) 
 		# Some intractable rounding errors??
 		if i>=self.nx:
 			print( i, " Too big x! ", self.nx)
