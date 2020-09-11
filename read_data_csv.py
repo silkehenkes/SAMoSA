@@ -62,6 +62,8 @@ class ReadData:
 			#  id  type  flag  radius  x  y  z  vx  vy  vz  nx  ny  nz 
 			self.data.rename(columns={"xPos": "x", "yPos": "y", "xVel": "vx", "yVel": "vy", "xPol": "nx", "yPol": "ny", "rad":"radius", "glued":"type"}, inplace=True,errors="raise")
 			#print(self.data.columns)
+		elif self.dialect == "CAPMD":
+			self.data = pandas.read_csv(self.datafile,header=0)
 		else:
 			print("Unknown data format dialect!")
 		
