@@ -17,13 +17,14 @@ from read_param import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--conffile", type=str, default="cornea_large_260819.conf", help="configuration file")
-parser.add_argument("-d", "--directory", type=str, default="/home/sh18581/Documents/Cornea/radius_300/J_0.1/v0_3.0/nu_1.0/rdivide_0.2/redo_with_n/",help="input directory")
+parser.add_argument("-d", "--directory", type=str, default="/media/sh18581/Elements/CorneaSimulations/Kaja/CorneaSimulations/cornea181019_cone/radius_300/J_0.1/v0_3/nu_1.0/rdivide_0.2/rl_0.4/ratio_0.1/",help="input directory")
 #parser.add_argument("-o", "--output", type=str, help="output directory")
 #parser.add_argument("-p", "--prefix", type=str, default="cornea",help="prefix for output file")
-parser.add_argument("-s", "--skip", type=int, default=1100, help="skip this many samples")
+parser.add_argument("-s", "--skip", type=int, default=500, help="skip this many samples")
 parser.add_argument("-m", "--howmany", type=int, default=30, help="read this many samples")
 parser.add_argument("-t", "--step", type=int, default=4, help="step snapshots with this spacing in flow field")
 parser.add_argument("-a", "--average", type=int, default=5, help="average over these many samples in flow field")
+parser.add_argument("--coneangle", type=int, default=30, help="cone angle in degrees")
 #parser.add_argument("-u", "--maxtype", type=int, default=3, help="Up to what maximum type should I process data?")
 #parser.add_argument("--getMSD", action='store_true', default=False, help="Compute mean squared displacement?")
 #parser.add_argument("--plot", action='store_true', default=False, help="Plot MSD and correlations")
@@ -42,47 +43,131 @@ Cornea.readDataMany("SAMoS",args.skip,args.step,args.howmany,True,readtypes = [1
 #def __init__(self,directory,conffile,skip,howmany,ignore=True,maxtype=3):
 
 data={'configuration':args.conffile}
+
 write = Writer()
 output= True
 
 nav = 0
 nbin = 100
+
+data['nbin']=nbin
+data['directory']=args.directory
+data['skip']=args.skip
+data['howmany']=args.howmany
+data['step']=args.step
+data['average']=args.average
+data['coneangle']=args.coneangle
+
+# Histogram of swirling
 v_swirlhist = np.zeros((args.howmany-args.average,nbin))
 n_swirlhist = np.zeros((args.howmany-args.average,nbin))
+v_swirlerr = np.zeros((args.howmany-args.average,nbin))
+n_swirlerr = np.zeros((args.howmany-args.average,nbin))
 v_inhist = np.zeros((args.howmany-args.average,nbin))
 n_inhist = np.zeros((args.howmany-args.average,nbin))
+v_inerr = np.zeros((args.howmany-args.average,nbin))
+n_inerr = np.zeros((args.howmany-args.average,nbin))
+
+v_isdata = np.zeros((args.howmany-args.average,nbin))
+n_isdata = np.zeros((args.howmany-args.average,nbin))
+
+# Defects
+vdefout= []
+nvdefout = []
+ndefout= []
+nndefout = []
+
+# Tilting success
+goodconf_n = []
+goodconf_v = []
+
+# Central defect positon
+n_defpos = []
+v_defpos = []
+
+rmerge=10
+nuke=True
+maxedge=25
+
+data['rmerge']=rmerge
+data['tesstype']='delaunay'
+data['nuke']=nuke
+data['maxedge']=maxedge
+
+# Attempt to compute things now
+# Exclude the boundary by stopping a couple of cells short from the cone angle. Cell diameter = 10 (micron)
+# 3 cells in radians
+dboundary = 30.0/Cornea.geom.R
+print(dboundary)
+maxangle = args.coneangle/360.0*2*np.pi - dboundary
+print('Going out to maximum angle ' + str(maxangle) + ' in degrees ' + str(maxangle/(2*np.pi)*360))
+
+data['maxangle']=maxangle
+	
+	
+
 nav = 0
 for k in range(args.howmany-args.average):
 	useparts, FlowField, PolarField = Cornea.getFlowField(k,args.average)
 	flowChild = Cornea.makeFlowChild(k,useparts,FlowField,PolarField)
 	# def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False):
-	defects_v, numdefect_v,tess = Cornea.getDefects(flowChild,'velocity','polar',20,3,0.5,False,True)
-	defects_n, numdefect_n,tess = Cornea.getDefects(flowChild,'orientation','polar',30,3,0.5,False,True)
+	defects_v, numdefect_v,tess = Cornea.getDefects(flowChild,'velocity','polar',rmerge,3,0.5,False,True,nuke=True,maxedge=maxedge)
+	defects_n, numdefect_n,tess = Cornea.getDefects(flowChild,'orientation','polar',rmerge,3,0.5,False,True,nuke=True,maxedge=maxedge)
+	
+	vdefout.append(defects_v)
+	nvdefout.append(numdefect_v)
+	ndefout.append(defects_n)
+	nndefout.append(numdefect_n)
 	
 	if output:
 		tess.OrderPatches()
 		write.writeConfigurationVTK(flowChild,'test_' +str(k) +'.vtp')
-		write.writePatches(tess,'test_patches_'+str(k)+'.vtp')
+		#write.writePatches(tess,'test_patches_'+str(k)+'.vtp')
 		write.writeDefects(defects_v, numdefect_v,'test_flowdefects_' + str(k) + '.vtp')
 		write.writeDefects(defects_n, numdefect_n,'test_polarisationdefects' +str(k) + '.vtp')
 	
-	# Attempt to compute things now
+	
+	
+	# We are redressing the tilt twice. This rewrites the flowChild. Hence we need a copy. Use the actual Configuration (near) copy constructor for once.
+	# def makeChild(self,parentconf,frame=1,usetype='all'):
+	flowChild2 = Configuration(initype="makeChild",parentconf=flowChild,frame=1,usetype="all")
+	
+	# Use the director defect to redress tilt for n field
 	#def centralDefect(self,child,defects,numdefect,maxangle=0.3*np.pi):
-	defectpos = Cornea.centralDefect(flowChild,defects_n,numdefect_n)
-	#def redressTiltDefect(self,child,defectpos,debug=True):
+	defectpos = Cornea.centralDefect(flowChild,defects_n,numdefect_n,maxangle=maxangle)
+	n_defpos.append(defectpos)
 	if not defectpos == "problem":
+		goodconf_n.append(k)
 		flowChild, axis, rot_angle = Cornea.redressTiltDefect(flowChild,defectpos)
-		write.writeConfigurationVTK(flowChild,'retilted_' +str(k) +'.vtp')
+		#write.writeConfigurationVTK(flowChild,'retilted_' +str(k) +'.vtp')
 		#thetabin, isdata, swirlhist, inhist, swirlerr, inerr = getSwirlInward(self,child,field,thetamax =70/360.0*2*np.pi,nbin=50,verbose=True)
-		thetabin, isdata, v_swirlhist[k,:], v_inhist[k,:], swirlerr, inerr = Cornea.getSwirlInward(flowChild,"velocity",1.5,nbin)
-		thetabin, isdata, n_swirlhist[k,:], n_inhist[k,:], swirlerr, inerr = Cornea.getSwirlInward(flowChild,"orientation",1.5,nbin)
+		thetabin, n_isdata[k,:], n_swirlhist[k,:], n_inhist[k,:], n_swirlerr[k,:], n_inerr[k,:] = Cornea.getSwirlInward(flowChild,"orientation",maxangle,nbin)
 		nav+=1
 	else:
-		print("Couldn't find a central defect, doing nothing!")
+		print("Couldn't find a central n defect, doing nothing!")
+	
+	# Same thing but for v
+	defectpos2 = Cornea.centralDefect(flowChild2,defects_v,numdefect_v,maxangle=maxangle)
+	v_defpos.append(defectpos2)
+	#def redressTiltDefect(self,child,defectpos,debug=True):
+	if not defectpos2 == "problem":
+		goodconf_v.append(k)
+		flowChild2, axis, rot_angle = Cornea.redressTiltDefect(flowChild2,defectpos2)
+		#thetabin, isdata, swirlhist, inhist, swirlerr, inerr = getSwirlInward(self,child,field,thetamax =70/360.0*2*np.pi,nbin=50,verbose=True)
+		thetabin2, v_isdata[k,:], v_swirlhist[k,:], v_inhist[k,:], v_swirlerr[k,:], v_inerr[k,:] = Cornea.getSwirlInward(flowChild,"velocity",maxangle,nbin)
+		nav+=1
+	else:
+		print("Couldn't find a central v defect, doing nothing!")
 
-	# Writing output (overkill to start with)
-	# No point for delaunay. It will make triangles, even if it has to contort itself into a pretzel.
-	#tess.makeEdges()
+data['goodconf_n']=goodconf_n
+data['goodconf_v']=goodconf_v
+data.update({'vdef':vdefout,'nvdef':nvdefout,'ndef':ndefout,'nndef':nndefout,'n_defpos':n_defpos,'v_defpos':v_defpos})
+data.update({'thetabin':thetabin,'n_isdata':n_isdata,'n_swirlhist':n_swirlhist,'n_inhist':n_inhist,'n_swirlerr':n_swirlerr,'n_inerr':n_inerr})
+data.update({'v_isdata':v_isdata,'v_swirlhist':v_swirlhist,'v_inhist':v_inhist,'v_swirlerr':v_swirlerr,'v_inerr':v_inerr})
+	
+# Save the output files
+outcornea='corneastats.p'
+pickle.dump(data,open(outcornea,'wb'))
 
 plt.figure()
 dtheta=thetabin[1]-thetabin[0]
@@ -103,10 +188,6 @@ plt.legend()
 plt.title('Swirl and inward for orientation')
 
 
-
-# Save the output files
-#outcornea=args.output + args.prefix +'.p'
-#pickle.dump(data,open(outcornea,'wb'))
 plt.show()
 
 	

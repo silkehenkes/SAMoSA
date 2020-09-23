@@ -14,6 +14,7 @@ class Defects:
 	def __init__(self,tess,conf,parallelTransport=False,verbose=False):
 		
 		self.LoopList=tess.LoopList
+		self.badloops = tess.badloops
 		self.conf=conf
 		self.normal=conf.geom.UnitNormal(conf.rval)
 		self.theta,self.phi,self.etheta,self.ephi = conf.geom.TangentBundle(conf.rval)
@@ -69,36 +70,37 @@ class Defects:
 			return 1
 		# Run through the tesselation loops to check each and every one for the presence of a defect
 		for u in range(len(self.LoopList)):
-			thisLoop=self.LoopList[u]
-			if symtype=='oldnematic':
-				charge=self.getDefectsGoldenfeld(thisLoop,field)
-			else:
-				charge=self.computeDefect(thisLoop,field,symtype)
-			if abs(charge)>0:
-				print("Found Defect in " + field + " field!")
-				print(charge)
-				if field == 'orientation':
-					char_n+=charge
+			if not u in self.badloops:
+				thisLoop=self.LoopList[u]
+				if symtype=='oldnematic':
+					charge=self.getDefectsGoldenfeld(thisLoop,field)
 				else:
-					char_v+=charge
-				# Construct the geometric centre of the defect
-				r0s=self.conf.rval[thisLoop]
-				if self.conf.geom.periodic:
-					r0s[1:,:]=self.conf.geom.ApplyPeriodic12(r0s[0,:],r0s[1:,:])+r0s[0,:]
-				rmval=np.mean(r0s,axis=0)
-				if self.conf.geom.manifold=='sphere':
-					rabs=np.sqrt(rmval[0]**2+rmval[1]**2+rmval[2]**2)
-					rmval=rmval/rabs*self.conf.geom.R
-				# Charge of the defect
-				defbit=[charge]
-				defbit.extend(list(rmval))
-				if field == 'orientation':
-					self.defects_n.append(defbit)
-					self.numdefect_n+=1
-				else:
-					self.defects_v.append(defbit)
-					self.numdefect_v+=1
+					charge=self.computeDefect(thisLoop,field,symtype)
+				if abs(charge)>0:
+					print("Found Defect in " + field + " field with charge " + str(charge) + "!")
+					if field == 'orientation':
+						char_n+=charge
+					else:
+						char_v+=charge
+					# Construct the geometric centre of the defect
+					r0s=self.conf.rval[thisLoop]
+					if self.conf.geom.periodic:
+						r0s[1:,:]=self.conf.geom.ApplyPeriodic12(r0s[0,:],r0s[1:,:])+r0s[0,:]
+					rmval=np.mean(r0s,axis=0)
+					#if self.conf.geom.manifold=='sphere':
+						#rabs=np.sqrt(rmval[0]**2+rmval[1]**2+rmval[2]**2)
+						#rmval=rmval/rabs*self.conf.geom.R
+					# Charge of the defect
+					defbit=[charge]
+					defbit.extend(list(rmval))
+					if field == 'orientation':
+						self.defects_n.append(defbit)
+						self.numdefect_n+=1
+					else:
+						self.defects_v.append(defbit)
+						self.numdefect_v+=1
 		if field == 'orientation':
+			
 			print('Number of orientation field defects: ' + str(self.numdefect_n))
 			print('Total charge of orientation field defects: ' + str(char_n))
 			return self.defects_n, self.numdefect_n
@@ -167,7 +169,7 @@ class Defects:
 			else:
 				print("Unknown symmetry type, doing nothing")
 				theta=0.0
-			#print theta
+			#print(theta)
 			# Note that we can't have differences in angle bigger than -pi to pi between individual arrows here
 			if abs(theta)>np.pi:
 				theta = theta - 2*np.pi*np.sign(theta)

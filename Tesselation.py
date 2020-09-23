@@ -19,6 +19,7 @@ class Tesselation:
 		self.geom=self.conf.geom
 		self.debug=debug
 		self.ordered_patches = False
+		self.badloops = []
 		
 		# We will need local coordinates on the surface
 		self.conf.getTangentBundle()
@@ -200,8 +201,6 @@ class Tesselation:
 	# Strongly preferred option for inhomogeneous systems
 	# Only option for irregular surfaces
 	def findLoop(self,closeHoles=False,zmin=3,mult0=1.0,mult1=MMAX):
-		
-		
 		neighList=[]
 		self.Ival=[]
 		self.Jval=[]
@@ -343,6 +342,24 @@ class Tesselation:
 		print("Found " + str(len(self.LoopList)) + " loops!")
 		return self.LoopList,self.Ival,self.Jval
       
+	# For the cornea, this makes loops at the underside of the cornea from those Delaunay triangles. Those are not useful, and create wrong defects. 
+	# Flag based on line length criterion, not area, as there are odd birds around.
+	# Not easy to throw out of everything at this point ... just work with list of bad ones
+	def cleanLoops(self,maxedge=25):
+		for l0 in range(len(self.LoopList)):
+			llist=self.LoopList[l0]
+			looppos=self.rval[llist]
+			nuke = False
+			for k in range(len(llist)):
+				k1 = (k+1)%len(llist)
+				edgelen = self.geom.GeodesicDistance1d(looppos[k,:],looppos[k1,:])
+				#print(edgelen)
+				if edgelen>maxedge:
+					nuke = True
+			if nuke:
+				self.badloops.append(l0)
+		print("The following loops are suspicious:" + str(self.badloops))
+			
 	# Much prettier: a loop that is too big (as measured by the mean square distance of the distances to the particles)
 	# Deconstruct it into lots of little loops (virtual ones), with defined centers
 	def makeEdges(self,maxlen=20):

@@ -116,7 +116,7 @@ class Topology(Configuration):
 	# use with frameChild to track defects in a particular frame
 	# use with flowChild and field = "velocity" and symtype = "polar" to track the flow field on the cornea
 	# Track the (polar) defects on a corneal flow field
-	def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False):
+	def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False,nuke=True,maxedge=25):
 		
 		# Now generate tesselation and defects
 		tess = Tesselation(child)
@@ -127,14 +127,18 @@ class Topology(Configuration):
 			#findLoop(self,closeHoles=False,zmin=3,mult0=1.0,mult1=MMAX):
 			LoopList,Ival,Jval = tess.findLoop(closeHoles,zmin,mult)
 		print("found loops")
+		if nuke:
+			tess.cleanLoops(maxedge=maxedge)
 		df = Defects(tess,child)
 		defects0,numdefect0=df.getDefects(symtype,field)
 		# Clean up and merge the resulting defects
-		defects,numdefect = df.mergeDefects(defects0,numdefect0,rmerge)
-		#defects = defects0
-		#numdefect = numdefect0
+		if rmerge>0.0:
+			defects,numdefect = df.mergeDefects(defects0,numdefect0,rmerge)
+		else:
+			print("Not merging defects!")
+			defects = defects0
+			numdefect = numdefect0
 		print("After merging field " + field + " with symtype " + symtype + " and mrege radius " + str(rmerge) + " found " + str(numdefect) + " defects:")
-		print(defects)
 		
 		# tesselation for writer ... less than elegant
 		return defects, numdefect, tess
