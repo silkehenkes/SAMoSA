@@ -26,34 +26,55 @@ class Cell:
     
 
 class CellList:
-	# Create my boxes           
-	def __init__(self,geom, r_cut):
+	# Create my boxes  
+	# Special unique hack for dealing with gargantuan corneas: cut off below the angle mark (or maybe the min z in the sample)
+	def __init__(self,geom, r_cut,rmin='default',rmax='default'):
 		self.geom=geom
 		self.r_cut = r_cut
 		#self.box = box
 		self.cell_indices = {}
+		if rmin == 'default':
+			self.xmin = - 0.5*self.geom.Lz
+			self.ymin = - 0.5*self.geom.Ly
+			self.zmin = - 0.5*self.geom.Lz
+		else:
+			self.xmin = rmin[0]
+			self.ymin = rmin[1]
+			self.zmin = rmin[2]
+		if rmax == 'default':
+			self.xmax = 0.5*self.geom.Lz
+			self.ymax = 0.5*self.geom.Ly
+			self.zmax = 0.5*self.geom.Lz
+		else:
+			self.xmax = rmax[0]
+			self.ymax = rmax[1]
+			self.zmax = rmax[2]
+		xextent = self.xmax-self.xmin	
+		yextent = self.ymax-self.ymin	
+		zextent = self.zmax-self.zmin	
+		print("Making cell list with new box (xmin, ymin, zmin) = (" + str(self.xmin) + ',' + str(self.ymin) + ',' + str(self.zmin) + ") to  (xmax, ymax, zmax) = (" + str(self.xmax) + ',' + str(self.ymax) + ',' + str(self.zmax) + ")")
 		# The size of the box collection is always set by the system box size
 		# Which is what is used in the C++ code as well
 		#Lx, Ly, Lz = self.box
 		#self.Lx, self.Ly, self.Lz = Lx, Ly, Lz 
 		# Number and linear extensions of the boxes in all three dimensions
-		self.nx = int(self.geom.Lx/r_cut)
-		self.ny = int(self.geom.Ly/r_cut)
-		self.nz = int(self.geom.Lz/r_cut)
-		self.dx = self.geom.Lx/float(self.nx)
-		self.dy = self.geom.Ly/float(self.ny)
-		self.dz = self.geom.Lz/float(self.nz)
+		self.nx = int(xextent/r_cut)
+		self.ny = int(yextent/r_cut)
+		self.nz = int(zextent/r_cut)
+		self.dx = xextent/float(self.nx)
+		self.dy = yextent/float(self.ny)
+		self.dz = zextent/float(self.nz)
 		# total number of cells
 		n_cell = self.nx*self.ny*self.nz
 		print("Created CellList with " + str(n_cell) + " boxes, as nx=" + str(self.nx) + ', ny=' + str(self.ny) + ', nz=' + str(self.nz))
 		# Cell list is a python list
 		self.cell_list = [None for i in range(n_cell)]
 		for i in range(self.nx):
-			x = -0.5*self.geom.Lx + float(i)*self.dx
+			x = self.xmin + i*self.dx
 			for j in range(self.ny):
-				y = -0.5*self.geom.Ly + float(j)*self.dy
+				y = self.ymin + j*self.dy
 				for k in range(self.nz):
-					z = -0.5*self.geom.Lz + float(k)*self.dz
+					z = self.zmin + k*self.dz
 					# Cell labeling scheme: for each x, do all y, and for all y, do all z
 					idx = self.ny*self.nz*i + self.nz*j + k
 					# Create new cell with index, position and size
@@ -114,8 +135,7 @@ class CellList:
 	def get_cell_idx(self, rval):
 		# This effing thing is being modified inside!
 		rval0=self.geom.ApplyPeriodic1d(rval,replace=False)
-		xmin, ymin, zmin = -0.5*self.geom.Lx, -0.5*self.geom.Ly, -0.5*self.geom.Lz
-		i, j, k = int((rval0[0]-xmin)/self.dx), int((rval0[1]-ymin)/self.dy), int((rval0[2]-zmin)/self.dz) 
+		i, j, k = int((rval0[0]-self.xmin)/self.dx), int((rval0[1]-self.ymin)/self.dy), int((rval0[2]-self.zmin)/self.dz) 
 		# Some intractable rounding errors??
 		if i>=self.nx:
 			print( i, " Too big x! ", self.nx)

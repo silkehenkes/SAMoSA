@@ -249,7 +249,7 @@ class Defects:
 	# Do a round of cleanup by merging near pairs
 	# Merging very close defects
 	# Adapted to work on on single snapshots now
-	def mergeDefects(self,defects,ndefects,rmerge,verbose=False):
+	def mergeDefects(self,defects,ndefects,rmerge,verbose=True):
 		defects1=[]
 		# Dig out defects, associate position, charge and angles
 		ndef=len(defects)

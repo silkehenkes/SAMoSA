@@ -30,26 +30,40 @@ class Topology(Configuration):
 	def getFlowField(self,inisnap,dsnap=1,debug=False):
 		# attempt to compute the flow field between two snapshots, based on the uniquely labeled particles present in both
 		flag1=list(self.flag[inisnap,:self.Nval[inisnap]])
+		print("Computed flag 1")
 		flag2=list(self.flag[inisnap+dsnap,:self.Nval[inisnap+dsnap]])
-		#print(flag1)
-		#print(flag2)
-		# intersection: do this manually, possibly easier ...
-		# labels in order for both
-		useparts1=[]
-		useparts2=[]
-		index=[]
-		hasdied=[]
-		for k1 in range(len(flag1)):
-			try:
-				k2=flag2.index(flag1[k1])
-				useparts1.append(k1)
-				useparts2.append(k2)
-				index.append(flag1[k1])
-			except:
-				if debug:
-					print("particle " + str(flag1[k1]) + " died.")
-				hasdied.append(k1)
-		#print(index)
+		print("Computed flag 2")
+		
+		## intersection: do this manually, possibly easier ...
+		## labels in order for both
+		#useparts1=[]
+		#useparts2=[]
+		#index=[]
+		#hasdied=[]
+		#for k1 in range(len(flag1)):
+			#try:
+				#k2=flag2.index(flag1[k1])
+				#useparts1.append(k1)
+				#useparts2.append(k2)
+				#index.append(flag1[k1])
+			#except:
+				#if debug:
+					#print("particle " + str(flag1[k1]) + " died.")
+				#hasdied.append(k1)
+		##print(index)
+		
+		# 29.09.20: Won't cut the mustard on speed with the cornea, need to do without search
+		# First use intersection of flag1 and flag2 to find particles that exist in both. There are no duplicates and we don't care about order, so use sets.
+		index = list(set(flag1) & set(flag2))
+		print("Computed index")
+		
+		# Now we just need to tell the system where to find those.
+		# This *does* rely on the order of particles not getting jumbled up. Correct for samos because new particles get stuck to the end.
+		useparts1 = [ idx for idx,val in enumerate(flag1) if val in index]
+		print("Computed useparts1")
+		useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
+		print("Computed useparts2")
+		
 		
 		# Make this the actual displacement field
 		flowField = (self.rval[inisnap+dsnap,useparts2,:]-self.rval[inisnap,useparts1,:])
@@ -57,15 +71,21 @@ class Topology(Configuration):
 		# also generate a polarisation field that is averaged over the snaps in between
 		nsnap = dsnap+1
 		polarField = self.nval[inisnap,useparts1,:]/nsnap
+		#for u in range(1,nsnap):
+			#print(u)
+			#flag2=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
+			##print(flag2)
+			#useparts2=[]
+			#for k in range(len(useparts1)):
+				#k2 = flag2.index(index[k])
+				#useparts2.append(k2)
+			#polarField = polarField +  self.nval[inisnap+u,useparts2,:]/nsnap
 		for u in range(1,nsnap):
-			print(u)
+			print('Starting polar director averaging snapshop',u)
 			flag2=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
-			#print(flag2)
-			useparts2=[]
-			for k in range(len(useparts1)):
-				k2 = flag2.index(index[k])
-				useparts2.append(k2)
+			useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
 			polarField = polarField +  self.nval[inisnap+u,useparts2,:]/nsnap
+			
 		# need to normalise again for tracking
 		nnorm = np.sqrt(polarField[:,0]**2 + polarField[:,1]**2+polarField[:,2]**2)
 		polarField = polarField / np.outer(nnorm,np.ones((3,)))
@@ -103,12 +123,12 @@ class Topology(Configuration):
 		flag0 = self.flag[frame,useparts]
 		
 		# Generate child configuration (not through makeChild because we use flowField as velocities)
-		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=PolarField,radii=radius0,ptype=ptype0,flag=flag0)
+		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=PolarField,radii=radius0,ptype=ptype0,flag=flag0,redobox=True)
 		return flowChild
 		
 	def makeFrameChild(self,frame):
 		# first generate the appropriate child configuration for only that frame
-		frameChild = Configuration(initype="makeChild",frame=frame,usetype="all")
+		frameChild = Configuration(initype="makeChild",frame=frame,usetype="all",redobox=True)
 		return frameChild
 	
 	
@@ -241,10 +261,9 @@ class Topology(Configuration):
 		
 		# Now: actually rotate the configuration and redo the cell list
 		child.rotateFrame(axis0,rot_angle)
-		# Need to redo the cell list after the rotation
-		child.redoCellList()
 		
 		return child, direction, orderpar, axis, rot_angle
+	
 	
 	# Reorient configuation based on the position of a defect (as a simple coordinate triplet)
 	# For Cornea, but potentially for other things too 
@@ -280,7 +299,15 @@ class Topology(Configuration):
 		# Now: actually rotate the configuration and redo the cell list
 		child.rotateFrame(axis0,rot_angle)
 		
-		return child, axis, rot_angle
+		return axis, rot_angle
+
+	def unTilt(self,child,axis,rot_angle):
+		axis0 = np.empty((child.N,3))
+		axis0[:,0] = axis[0]
+		axis0[:,1] = axis[1]
+		axis0[:,2] = axis[2]
+		
+		child.rotateFrame(axis0,-rot_angle)
 	
 	# Cornea profiles: Simpler, to be able to compare to the experiments
 	# Directly adapted from corresponding code

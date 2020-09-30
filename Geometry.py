@@ -43,6 +43,19 @@ class Geometry(object):
 		vrot[:,1]=rotmat[:,1,0]*v[:,0]+rotmat[:,1,1]*v[:,1]+rotmat[:,1,2]*v[:,2]
 		vrot[:,2]=rotmat[:,2,0]*v[:,0]+rotmat[:,2,1]*v[:,1]+rotmat[:,2,2]*v[:,2]
 		return vrot
+	
+	# Note that for convenience, axis n already has the same dimensions as v
+	def RotateRodriguez(self,v,n,phi):
+		# Rodriguez rotation formula:
+		# vrot = v cos phi + (n x v) sin theta + n (n . v) (1-cos phi)
+		# Is invertible: just rotate by -phi around same axis
+		vrot=np.empty(np.shape(v))
+		crossed = np.cross(n,v)
+		dotted = np.sum(n*v,axis=1)
+		vrot[:,0] = v[:,0]*np.cos(phi) + crossed[:,0]*np.sin(phi) + dotted*(1.0-np.cos(phi))*v[:,0]
+		vrot[:,1] = v[:,1]*np.cos(phi) + crossed[:,1]*np.sin(phi) + dotted*(1.0-np.cos(phi))*v[:,1]
+		vrot[:,2] = v[:,2]*np.cos(phi) + crossed[:,2]*np.sin(phi) + dotted*(1.0-np.cos(phi))*v[:,2]
+		return vrot
 
 	# Default: parallel transport just transports parallel; i.e. it does nothing in a flat geometry    
 	def ParallelTransport(self,r1,r2,a2):
