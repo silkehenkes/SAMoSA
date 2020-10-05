@@ -22,10 +22,6 @@ class Topology(Configuration):
 		if not self.multiopt == "many":
 			print("Topology:: Error: Cannot run full topology without reading in multiple files! Use manual Configuration / Tesselation / Defect for a single file instead.")
 			sys.exit()
-		# Some booleans to avoid redoing the whole shebang twice as some computations depend on others
-		hasWriter = False
-		# Is there a current child configuration?
-		hasChild = False
 		
 	def getFlowField(self,inisnap,dsnap=1,debug=False):
 		# attempt to compute the flow field between two snapshots, based on the uniquely labeled particles present in both
@@ -34,35 +30,36 @@ class Topology(Configuration):
 		flag2=list(self.flag[inisnap+dsnap,:self.Nval[inisnap+dsnap]])
 		print("Computed flag 2")
 		
-		## intersection: do this manually, possibly easier ...
-		## labels in order for both
-		#useparts1=[]
-		#useparts2=[]
 		#index=[]
-		#hasdied=[]
-		#for k1 in range(len(flag1)):
-			#try:
-				#k2=flag2.index(flag1[k1])
-				#useparts1.append(k1)
-				#useparts2.append(k2)
-				#index.append(flag1[k1])
-			#except:
-				#if debug:
-					#print("particle " + str(flag1[k1]) + " died.")
-				#hasdied.append(k1)
-		##print(index)
+		runidx=0
+		useparts1=[]
+		useparts2=[]
+		for u in range(self.Nval[inisnap]):
+			# The particle existed in the first set. Run down the flag of the second set. Flags are in increasing order. I will either hit it or else the particle has died
+			flagi = flag1[u]
+			while flag2[runidx]<flagi:
+				runidx +=1
+			# Now it's either hit it or it's bigger. If it has hit it, keep it for the flow field
+			if flag2[runidx] == flagi:
+				#index.append(flagi)
+				useparts1.append(u)
+				useparts2.append(runidx)
+		print("Computed useparts1 and 2")		
+		#print(index)
+		#print(useparts1)
+		#print(useparts2)
 		
-		# 29.09.20: Won't cut the mustard on speed with the cornea, need to do without search
-		# First use intersection of flag1 and flag2 to find particles that exist in both. There are no duplicates and we don't care about order, so use sets.
-		index = list(set(flag1) & set(flag2))
-		print("Computed index")
+		## 29.09.20: Won't cut the mustard on speed with the cornea, need to do without search
+		## First use intersection of flag1 and flag2 to find particles that exist in both. There are no duplicates and we don't care about order, so use sets.
+		#index = list(set(flag1) & set(flag2))
+		#print("Computed index")
 		
-		# Now we just need to tell the system where to find those.
-		# This *does* rely on the order of particles not getting jumbled up. Correct for samos because new particles get stuck to the end.
-		useparts1 = [ idx for idx,val in enumerate(flag1) if val in index]
-		print("Computed useparts1")
-		useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
-		print("Computed useparts2")
+		## Now we just need to tell the system where to find those.
+		## This *does* rely on the order of particles not getting jumbled up. Correct for samos because new particles get stuck to the end.
+		#useparts1 = [ idx for idx,val in enumerate(flag1) if val in index]
+		#print("Computed useparts1")
+		#useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
+		#print("Computed useparts2")
 		
 		
 		# Make this the actual displacement field
@@ -71,19 +68,39 @@ class Topology(Configuration):
 		# also generate a polarisation field that is averaged over the snaps in between
 		nsnap = dsnap+1
 		polarField = self.nval[inisnap,useparts1,:]/nsnap
+	
 		#for u in range(1,nsnap):
-			#print(u)
+			#print('Starting polar director averaging snapshop',u)
 			#flag2=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
-			##print(flag2)
-			#useparts2=[]
-			#for k in range(len(useparts1)):
-				#k2 = flag2.index(index[k])
-				#useparts2.append(k2)
+			#useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
 			#polarField = polarField +  self.nval[inisnap+u,useparts2,:]/nsnap
+			
 		for u in range(1,nsnap):
 			print('Starting polar director averaging snapshop',u)
-			flag2=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
-			useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
+			flag3=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
+			#index=[]
+			runidx=0
+			runidx3=0
+			#useparts1=[]
+			useparts2=[]
+			for v in range(self.Nval[inisnap]):
+				# The particle existed in the first set. Run down the flag of the second set. Flags are in increasing order. I will either hit it or else the particle has died
+				flagi = flag1[v]
+				# advance the final particle index counter
+				while flag2[runidx]<flagi:
+					runidx +=1
+				# advance the current snapshot particle index counter
+				while flag3[runidx3]<flagi:
+					runidx3 +=1
+				# Now it's either hit it or it's bigger. If it has hit it, keep it for the flow field
+				# But for this version, append the index of the middle snaphshot
+				# If the particle has died by the final frame, runidx2 will just be thrown away
+				if flag2[runidx] == flagi:
+					#index.append(flagi)
+					#useparts1.append(u)
+					useparts2.append(runidx3)
+				
+			#useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
 			polarField = polarField +  self.nval[inisnap+u,useparts2,:]/nsnap
 			
 		# need to normalise again for tracking
@@ -112,7 +129,7 @@ class Topology(Configuration):
 			
 		return useparts1, flowField, polarField
 	
-	def makeFlowChild(self,frame,useparts,FlowField,PolarField):
+	def makeFlowChild(self,frame,useparts,FlowField,PolarField,makeCellList=True):
 		# To handle this, generate a child configuration with the flow field as velocities.
 		# FIX: Copy parameters, currently. Go down a level of complexity later
 		param0 = self.param
@@ -123,12 +140,12 @@ class Topology(Configuration):
 		flag0 = self.flag[frame,useparts]
 		
 		# Generate child configuration (not through makeChild because we use flowField as velocities)
-		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=PolarField,radii=radius0,ptype=ptype0,flag=flag0,redobox=True)
+		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=PolarField,radii=radius0,ptype=ptype0,flag=flag0,makeCellList=makeCellList,redobox=True)
 		return flowChild
 		
 	def makeFrameChild(self,frame):
 		# first generate the appropriate child configuration for only that frame
-		frameChild = Configuration(initype="makeChild",frame=frame,usetype="all",redobox=True)
+		frameChild = Configuration(initype="makeChild",frame=frame,usetype="all",makeCellList=makeCellList,redobox=True)
 		return frameChild
 	
 	
@@ -260,7 +277,8 @@ class Topology(Configuration):
 		axis0[:,2] = axis[2]
 		
 		# Now: actually rotate the configuration and redo the cell list
-		child.rotateFrame(axis0,rot_angle)
+		# def rotateFrame(self,axis,rot_angle,frame=1,makeCellList=True):
+		child.rotateFrame(axis0,rot_angle,1,False)
 		
 		return child, direction, orderpar, axis, rot_angle
 	
@@ -297,7 +315,8 @@ class Topology(Configuration):
 		axis0[:,2] = axis[2]
 		
 		# Now: actually rotate the configuration and redo the cell list
-		child.rotateFrame(axis0,rot_angle)
+		# def rotateFrame(self,axis,rot_angle,frame=1,makeCellList=True):
+		child.rotateFrame(axis0,rot_angle,1,False)
 		
 		return axis, rot_angle
 
@@ -307,7 +326,7 @@ class Topology(Configuration):
 		axis0[:,1] = axis[1]
 		axis0[:,2] = axis[2]
 		
-		child.rotateFrame(axis0,-rot_angle)
+		child.rotateFrame(axis0,-rot_angle,1,False)
 	
 	# Cornea profiles: Simpler, to be able to compare to the experiments
 	# Directly adapted from corresponding code
@@ -365,6 +384,11 @@ class Topology(Configuration):
 			
 		return thetabin, isdata, swirlhist, inhist, swirlerr, inerr
 		
+	# Compute the flux through the boundaries by concentric rings around the defect
+	# In particular, look through imbalance of fluxes from division / death
+	# Needs to happen on the velocity field (aka already displacement field
+	def computeFlux(self,child,thetamax =70/360.0*2*np.pi,nbin=50,verbose=False):
+		pass
 	
 	# compute the profiles of everything on a sphere
 	# TO DO: Either adapt or second version to work on cornea swirl and inward measures

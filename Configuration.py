@@ -30,9 +30,9 @@ class Configuration:
 		if self.initype == "fromCSV":
 			self.fromCSV(kwargs["param"],kwargs["datapath"],kwargs["multiopt"])
 		elif self.initype == "makeChild":
-			self.makeChild(kwargs["parentconf"],kwargs["frame"],kwargs["usetype"],kwargs["redobox"])
+			self.makeChild(kwargs["parentconf"],kwargs["frame"],kwargs["usetype"],kwargs["makeCellList"],kwargs["redobox"])
 		elif self.initype == "fromPython":
-			self.fromPython(kwargs["param"],kwargs["rval"],kwargs["vval"],kwargs["nval"],kwargs["radii"],kwargs["ptype"],kwargs["flag"],kwargs["redobox"])
+			self.fromPython(kwargs["param"],kwargs["rval"],kwargs["vval"],kwargs["nval"],kwargs["radii"],kwargs["ptype"],kwargs["flag"],kwargs["makeCellList"],kwargs["redobox"])
 		else:
 			print("Configuration:Unknown configuration constructor option, stopping!")
 			sys.exit()
@@ -59,7 +59,7 @@ class Configuration:
 		print(self.geom)
 		
 	# Create configuration from some python data passed down to here
-	def fromPython(self,param,rval,vval,nval,radius,ptype,flag,redobox='False'):
+	def fromPython(self,param,rval,vval,nval,radius,ptype,flag,makeCellList=True,redobox=False):
 		self.debug = False
 		self.param = param
 		self.multiopt = "single"
@@ -88,29 +88,30 @@ class Configuration:
 		print (param.box)
 		self.geom=geometries[param.constraint](param)
 		
-		# Cut off the boxes. Curently only on  minimal z, for cornea. Others is less of a problem
-		#if self.geom.manifold == 'sphere':
-		#	zmin = np.amin(self.rval[:,2])-self.sigma
-		#else:
-		#	zmin = 'all'
-		if redobox:
-			rmin = np.zeros((3,))
-			rmax = np.zeros((3,))
-			rmin[0] = np.amin(self.rval[:,0])-self.sigma
-			rmin[1] = np.amin(self.rval[:,1])-self.sigma
-			rmin[2] = np.amin(self.rval[:,2])-self.sigma
-			rmax[0] = np.amax(self.rval[:,0])+self.sigma
-			rmax[1] = np.amax(self.rval[:,1])+self.sigma
-			rmax[2] = np.amax(self.rval[:,2])+self.sigma
-			# def makeCellList(self,frame=1,rmin='default',rmax='default'):
-			self.makeCellList(1,rmin,rmax)
-		else:
-			self.makeCellList(1)
+		if makeCellList:
+			# Cut off the boxes. Curently only on  minimal z, for cornea. Others is less of a problem
+			#if self.geom.manifold == 'sphere':
+			#	zmin = np.amin(self.rval[:,2])-self.sigma
+			#else:
+			#	zmin = 'all'
+			if redobox:
+				rmin = np.zeros((3,))
+				rmax = np.zeros((3,))
+				rmin[0] = np.amin(self.rval[:,0])-self.sigma
+				rmin[1] = np.amin(self.rval[:,1])-self.sigma
+				rmin[2] = np.amin(self.rval[:,2])-self.sigma
+				rmax[0] = np.amax(self.rval[:,0])+self.sigma
+				rmax[1] = np.amax(self.rval[:,1])+self.sigma
+				rmax[2] = np.amax(self.rval[:,2])+self.sigma
+				# def makeCellList(self,frame=1,rmin='default',rmax='default'):
+				self.makeCellList(1,rmin,rmax)
+			else:
+				self.makeCellList(1)
 		
 		
 				
 	# Glorified copy constructor to isolate one frame and a subset of particles. Will serve as input to Hessian or Tesselation
-	def makeChild(self,parentconf,frame=1,usetype='all',redobox=False):
+	def makeChild(self,parentconf,frame=1,usetype='all',makeCellList = True, redobox=False):
 		self.debug = parentconf.debug
 		self.param = parentconf.param
 		# Single frame for the child
@@ -150,20 +151,21 @@ class Configuration:
 		#self.inter = parentconf.inter
 		self.geom = parentconf.geom
 		
-		if redobox:
-			rmin = np.zeros((3,))
-			rmax = np.zeros((3,))
-			rmin[0] = np.amin(self.rval[:,0])-self.sigma
-			rmin[1] = np.amin(self.rval[:,1])-self.sigma
-			rmin[2] = np.amin(self.rval[:,2])-self.sigma
-			rmax[0] = np.amax(self.rval[:,0])+self.sigma
-			rmax[1] = np.amax(self.rval[:,1])+self.sigma
-			rmax[2] = np.amax(self.rval[:,2])+self.sigma
-			self.makeCellList(1,rmin,rmax)
-			# def makeCellList(self,frame=1,rmin='default',rmax='default'):
-			
-		else:
-			self.makeCellList(1)
+		if makeCellList:
+			if redobox:
+				rmin = np.zeros((3,))
+				rmax = np.zeros((3,))
+				rmin[0] = np.amin(self.rval[:,0])-self.sigma
+				rmin[1] = np.amin(self.rval[:,1])-self.sigma
+				rmin[2] = np.amin(self.rval[:,2])-self.sigma
+				rmax[0] = np.amax(self.rval[:,0])+self.sigma
+				rmax[1] = np.amax(self.rval[:,1])+self.sigma
+				rmax[2] = np.amax(self.rval[:,2])+self.sigma
+				self.makeCellList(1,rmin,rmax)
+				# def makeCellList(self,frame=1,rmin='default',rmax='default'):
+				
+			else:
+				self.makeCellList(1)
 		
 		
 	def readDataSingle(self,filename,dialect,internal=False,readtypes='all'):
@@ -427,7 +429,7 @@ class Configuration:
 			return self.x1,self.x2,self.e1,self.e2
 	
 	# Rotate the frame (for bands on spheres). If in multimodus, indicate frame as well.
-	def rotateFrame(self,axis,rot_angle,frame=1):
+	def rotateFrame(self,axis,rot_angle,frame=1,makeCellList=True):
 		print ("Rotating frame with axis " + str(axis[0,:]) + " and angle " + str(rot_angle))
 		if self.multiopt=="single":
 			self.rval = self.geom.RotateRodriguez(self.rval,axis,-rot_angle)
@@ -437,18 +439,19 @@ class Configuration:
 			self.nval = self.geom.RotateVectorial(self.nval,axis,-rot_angle)
 			self.nval=((self.nval).transpose()/(np.sqrt(np.sum(self.nval**2,axis=1))).transpose()).transpose()
 			#self.vel = np.sqrt(self.vval[:,0]**2 + self.vval[:,1]**2 + self.vval[:,2]**2)
-			# redo the cell list
-			# This needs a mandatory new box now
-			rmin = np.zeros((3,))
-			rmax = np.zeros((3,))
-			rmin[0] = np.amin(self.rval[:,0])-self.sigma
-			rmin[1] = np.amin(self.rval[:,1])-self.sigma
-			rmin[2] = np.amin(self.rval[:,2])-self.sigma
-			rmax[0] = np.amax(self.rval[:,0])+self.sigma
-			rmax[1] = np.amax(self.rval[:,1])+self.sigma
-			rmax[2] = np.amax(self.rval[:,2])+self.sigma
-			# def makeCellList(self,frame=1,rmin='default',rmax='default'):
-			self.makeCellList(1,rmin,rmax)
+			if makeCellList:
+				# redo the cell list
+				# This needs a mandatory new box now
+				rmin = np.zeros((3,))
+				rmax = np.zeros((3,))
+				rmin[0] = np.amin(self.rval[:,0])-self.sigma
+				rmin[1] = np.amin(self.rval[:,1])-self.sigma
+				rmin[2] = np.amin(self.rval[:,2])-self.sigma
+				rmax[0] = np.amax(self.rval[:,0])+self.sigma
+				rmax[1] = np.amax(self.rval[:,1])+self.sigma
+				rmax[2] = np.amax(self.rval[:,2])+self.sigma
+				# def makeCellList(self,frame=1,rmin='default',rmax='default'):
+				self.makeCellList(1,rmin,rmax)
 		else:
 			rval0 = self.geom.RotateRodriguez(self.rval[frame,self.Nval[frame],:],axis,-rot_angle)
 			vval0 = self.geom.RotateRodriguez(self.vval[frame,self.Nval[frame],:],axis,-rot_angle)
@@ -457,20 +460,22 @@ class Configuration:
 			self.rval[frame,self.Nval[frame],:]=rval0
 			self.vval[frame,self.Nval[frame],:]=vval0
 			self.nval[frame,self.Nval[frame],:]=nval0
-			# redo the cell list
-			rmin = np.zeros((3,))
-			rmax = np.zeros((3,))
-			rmin[0] = np.amin(self.rval0[:,0])-self.sigma
-			rmin[1] = np.amin(self.rval0[:,1])-self.sigma
-			rmin[2] = np.amin(self.rval0[:,2])-self.sigma
-			rmax[0] = np.amax(self.rval0[:,0])+self.sigma
-			rmax[1] = np.amax(self.rval0[:,1])+self.sigma
-			rmax[2] = np.amax(self.rval0[:,2])+self.sigma
-			# def makeCellList(self,frame=1,rmin='default',rmax='default'):
-			self.makeCellList(frame,rmin,rmax)
+			if makeCellList:
+				# redo the cell list
+				rmin = np.zeros((3,))
+				rmax = np.zeros((3,))
+				rmin[0] = np.amin(self.rval0[:,0])-self.sigma
+				rmin[1] = np.amin(self.rval0[:,1])-self.sigma
+				rmin[2] = np.amin(self.rval0[:,2])-self.sigma
+				rmax[0] = np.amax(self.rval0[:,0])+self.sigma
+				rmax[1] = np.amax(self.rval0[:,1])+self.sigma
+				rmax[2] = np.amax(self.rval0[:,2])+self.sigma
+				# def makeCellList(self,frame=1,rmin='default',rmax='default'):
+				self.makeCellList(frame,rmin,rmax)
 
 			
 	# get neighbours of a particle
+	# Careful! This needs a cell list
 	# Issues with particle on top of each other, usually beacuse of sloppy implementation of glued boundary conditions
 	# Remove them at the source, with a warning
 	def getNeighbours(self,i,mult=1.0,dmax="default",frame=1,eps=1e-8):

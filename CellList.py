@@ -7,22 +7,23 @@ from Geometry import *
 # it has its own index (label), position r (==(rx,ry,rz)) and extension L (==(Lx,Ly,Lz))
 class Cell:
   
-	def __init__(self, idx, r, L):
+	def __init__(self, idx):
 		self.idx = idx
-		self.r = r
-		self.L = L
+		#self.r = r
+		#self.L = L
+		# Labels of the particles in this cell
 		self.indices = []
 		# Labels (indices) of the neighbouring cells
 		self.neighbors = []
     
-	def add_particle(self, idx):
-		self.indices.append(idx)
+	#def add_particle(self, idx):
+		#self.indices.append(idx)
 		
-	def printMe(self):
-		print("I am cell " + str(self.idx))
-		print("My position is: " + str(self.r))
-		print("My particles are: " + str(self.indices))
-		print("My neighbour cells are: " + str(self.neighbors))
+	#def printMe(self):
+		#print("I am cell " + str(self.idx))
+		#print("My position is: " + str(self.r))
+		#print("My particles are: " + str(self.indices))
+		#print("My neighbour cells are: " + str(self.neighbors))
     
 
 class CellList:
@@ -78,7 +79,8 @@ class CellList:
 					# Cell labeling scheme: for each x, do all y, and for all y, do all z
 					idx = self.ny*self.nz*i + self.nz*j + k
 					# Create new cell with index, position and size
-					self.cell_list[idx] = Cell(idx,(x,y,z),(self.dx,self.dy,self.dz))
+					#self.cell_list[idx] = Cell(idx,(x,y,z))
+					self.cell_list[idx] = Cell(idx)
 					# Find neighbours: up to one above and below in all directions, moduly PBC
 					# Note that a cell is its own neigbhbour ...
 					self.PeriodicNeighbours(idx,i,j,k)
@@ -159,7 +161,8 @@ class CellList:
 			cell_idx = self.get_cell_idx(rval)
 		else:
 			cell_idx = cell_index    
-		self.cell_list[cell_idx].add_particle(idx)
+		#self.cell_list[cell_idx].add_particle(idx)
+		self.cell_list[cell_idx].indices.append(idx)
 		self.cell_indices[idx] = cell_idx
 		#print "Added particle " + str(idx) + " to cell " + str(cell_idx)
     
@@ -167,6 +170,12 @@ class CellList:
 	def wipe(self):
 		for cell in self.cell_list:
 			cell.vertices = []
+			
+	## Nuke empty parts of the list to free memory
+	#def cleanup(self):
+		#for cell in self.cell_list:
+			#cell.vertices = []
+		
       
 	# Get the neighbours of particle at position rval
 	# This means looking at the neighbour boxes (including oneself), and copying their list of neighbours into one
