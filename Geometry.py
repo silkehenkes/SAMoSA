@@ -52,9 +52,9 @@ class Geometry(object):
 		vrot=np.empty(np.shape(v))
 		crossed = np.cross(n,v)
 		dotted = np.sum(n*v,axis=1)
-		vrot[:,0] = v[:,0]*np.cos(phi) + crossed[:,0]*np.sin(phi) + dotted*(1.0-np.cos(phi))*v[:,0]
-		vrot[:,1] = v[:,1]*np.cos(phi) + crossed[:,1]*np.sin(phi) + dotted*(1.0-np.cos(phi))*v[:,1]
-		vrot[:,2] = v[:,2]*np.cos(phi) + crossed[:,2]*np.sin(phi) + dotted*(1.0-np.cos(phi))*v[:,2]
+		vrot[:,0] = v[:,0]*np.cos(phi) + crossed[:,0]*np.sin(phi) + dotted*(1.0-np.cos(phi))*n[:,0]
+		vrot[:,1] = v[:,1]*np.cos(phi) + crossed[:,1]*np.sin(phi) + dotted*(1.0-np.cos(phi))*n[:,1]
+		vrot[:,2] = v[:,2]*np.cos(phi) + crossed[:,2]*np.sin(phi) + dotted*(1.0-np.cos(phi))*n[:,2]
 		return vrot
 
 	# Default: parallel transport just transports parallel; i.e. it does nothing in a flat geometry    
