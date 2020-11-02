@@ -77,7 +77,7 @@ class Defects:
 				else:
 					charge=self.computeDefect(thisLoop,field,symtype)
 				if abs(charge)>0:
-					print("Found Defect in " + field + " field with charge " + str(charge) + "!")
+					#print("Found Defect in " + field + " field with charge " + str(charge) + "!")
 					if field == 'orientation':
 						char_n+=charge
 					else:
@@ -249,7 +249,7 @@ class Defects:
 	# Do a round of cleanup by merging near pairs
 	# Merging very close defects
 	# Adapted to work on on single snapshots now
-	def mergeDefects(self,defects,ndefects,rmerge,verbose=True):
+	def mergeDefects(self,defects,ndefects,rmerge,verbose=False):
 		defects1=[]
 		# Dig out defects, associate position, charge and angles
 		ndef=len(defects)

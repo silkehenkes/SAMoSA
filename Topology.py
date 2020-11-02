@@ -153,7 +153,7 @@ class Topology(Configuration):
 	# use with frameChild to track defects in a particular frame
 	# use with flowChild and field = "velocity" and symtype = "polar" to track the flow field on the cornea
 	# Track the (polar) defects on a corneal flow field
-	def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False,nuke=True,maxedge=25):
+	def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False,nuke=True,maxedge=25, coneangle=70.0/360*2*np.pi):
 		
 		# Now generate tesselation and defects
 		tess = Tesselation(child)
@@ -164,8 +164,13 @@ class Topology(Configuration):
 			#findLoop(self,closeHoles=False,zmin=3,mult0=1.0,mult1=MMAX):
 			LoopList,Ival,Jval = tess.findLoop(closeHoles,zmin,mult)
 		print("found loops")
+		# Removing bad loops. Adding a couple of criteria here.
+		# Remove by edge length as before, but spare it if it's close to the top (wounds or empty cornea)
+		# maxangle: 10 particle diameters in from the edge. Tesselation should be sensible at that point.
+		maxangle = coneangle - 20*child.sigma/child.geom.R
 		if nuke:
-			tess.cleanLoops(maxedge=maxedge)
+			# def cleanLoops(self,maxedge=25,cornea=True,crit = 0.75,maxangle=68/360.0*2*np.pi):
+			tess.cleanLoops(maxedge=maxedge,cornea=True,crit = 0.75, maxangle = maxangle)
 		df = Defects(tess,child)
 		defects0,numdefect0=df.getDefects(symtype,field)
 		# Clean up and merge the resulting defects
@@ -175,7 +180,7 @@ class Topology(Configuration):
 			print("Not merging defects!")
 			defects = defects0
 			numdefect = numdefect0
-		print("After merging field " + field + " with symtype " + symtype + " and mrege radius " + str(rmerge) + " found " + str(numdefect) + " defects:")
+		print("After merging field " + field + " with symtype " + symtype + " and rmerge radius " + str(rmerge) + " found " + str(numdefect) + " defects:")
 		
 		# tesselation for writer ... less than elegant
 		return defects, numdefect, tess
@@ -207,7 +212,6 @@ class Topology(Configuration):
 				print("A horrible mess")
 				return "problem"
 					
-		
 
 	# On the sphere with bands: locate the orientation of the flow of material on there
 	# Reorient the data set

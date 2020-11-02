@@ -329,13 +329,14 @@ class Tesselation:
 				dl=self.geom.ApplyPeriodic12(looppos[0,:],looppos)
 				looppos=looppos[0,:]+dl
 			lcen=[np.mean(looppos[:,0]), np.mean(looppos[:,1]),np.mean(looppos[:,2])]
-			# This centre can be in a dent for curved surfaces
-			# Easy to correct for a sphere
-			# Other geometries are not implemented so far
-			if self.conf.geom.manifold=='sphere':
-				llen=np.sqrt(lcen[0]**2+lcen[1]**2+lcen[2]**2)
-				lcen/=llen
-				lcen*=self.conf.geom.R
+			# DO NOT PROJECT THIS, else no error correction for cornea
+			## This centre can be in a dent for curved surfaces
+			## Easy to correct for a sphere
+			## Other geometries are not implemented so far
+			#if self.conf.geom.manifold=='sphere':
+				#llen=np.sqrt(lcen[0]**2+lcen[1]**2+lcen[2]**2)
+				#lcen/=llen
+				#lcen*=self.conf.geom.R
 			self.LoopCen.append(lcen)
 			self.LoopList.append(llist)
 			self.l+=1
@@ -345,16 +346,37 @@ class Tesselation:
 	# For the cornea, this makes loops at the underside of the cornea from those Delaunay triangles. Those are not useful, and create wrong defects. 
 	# Flag based on line length criterion, not area, as there are odd birds around.
 	# Not easy to throw out of everything at this point ... just work with list of bad ones
-	def cleanLoops(self,maxedge=25):
+	def cleanLoops(self,maxedge=25,cornea=True,crit = 0.75,maxangle=68/360.0*2*np.pi):
 		for l0 in range(len(self.LoopList)):
 			llist=self.LoopList[l0]
 			looppos=self.rval[llist]
 			nuke = False
+			edgelen=0
 			for k in range(len(llist)):
 				k1 = (k+1)%len(llist)
-				edgelen = self.geom.GeodesicDistance1d(looppos[k,:],looppos[k1,:])
-				#print(edgelen)
-				if edgelen>maxedge:
+				edgelen0 = self.geom.GeodesicDistance1d(looppos[k,:],looppos[k1,:])
+				if edgelen0>edgelen:
+					edgelen = edgelen0
+			#print(edgelen)
+			if edgelen>maxedge:
+				if cornea:
+					# Bespoke solution for cornea wounds / empty tops: Only remove triangle if it's at the bottom, i.e. if its centre is a fixed fraction away from the sphere equation.
+					loopcen = np.average(looppos,axis=0)
+					loopr = np.sqrt(loopcen[0]**2+loopcen[1]**2+loopcen[2]**2)
+					deq = (self.conf.geom.R - loopr)/self.conf.geom.R 
+					#print(deq)
+					if deq > crit:
+						nuke = True
+					# as before, also clean up around the edge
+					angle = np.arccos(loopcen[2]/loopr)
+					#print(angle)
+					if angle > maxangle:
+						nuke = True
+					#if not nuke:
+						#print("Keeping big loop with edgelen " + str(edgelen) + " and centre " + str(loopcen))
+					#else:
+						#print("Nuked big loop with edgelen " + str(edgelen) + " and centre " + str(loopcen))
+				else:
 					nuke = True
 			if nuke:
 				self.badloops.append(l0)

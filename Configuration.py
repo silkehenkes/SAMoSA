@@ -432,11 +432,11 @@ class Configuration:
 	def rotateFrame(self,axis,rot_angle,frame=1,makeCellList=True):
 		print ("Rotating frame with axis " + str(axis[0,:]) + " and angle " + str(rot_angle))
 		if self.multiopt=="single":
-			self.rval = self.geom.RotateRodriguez(self.rval,axis,-rot_angle)
-			self.vval = self.geom.RotateRodriguez(self.vval,axis,-rot_angle)
-			self.vhat = self.geom.RotateRodriguez(self.vhat,axis,-rot_angle)
+			self.rval = self.geom.RotateRodriguez(self.rval,axis,rot_angle)
+			self.vval = self.geom.RotateRodriguez(self.vval,axis,rot_angle)
+			self.vhat = self.geom.RotateRodriguez(self.vhat,axis,rot_angle)
 			self.vhat=((self.vhat).transpose()/(np.sqrt(np.sum(self.vhat**2,axis=1))).transpose()).transpose()
-			self.nval = self.geom.RotateVectorial(self.nval,axis,-rot_angle)
+			self.nval = self.geom.RotateVectorial(self.nval,axis,rot_angle)
 			self.nval=((self.nval).transpose()/(np.sqrt(np.sum(self.nval**2,axis=1))).transpose()).transpose()
 			#self.vel = np.sqrt(self.vval[:,0]**2 + self.vval[:,1]**2 + self.vval[:,2]**2)
 			if makeCellList:
@@ -453,9 +453,9 @@ class Configuration:
 				# def makeCellList(self,frame=1,rmin='default',rmax='default'):
 				self.makeCellList(1,rmin,rmax)
 		else:
-			rval0 = self.geom.RotateRodriguez(self.rval[frame,self.Nval[frame],:],axis,-rot_angle)
-			vval0 = self.geom.RotateRodriguez(self.vval[frame,self.Nval[frame],:],axis,-rot_angle)
-			nval0 = self.geom.RotateRodriguez(self.nval[frame,self.Nval[frame],:],axis,-rot_angle)
+			rval0 = self.geom.RotateRodriguez(self.rval[frame,self.Nval[frame],:],axis,rot_angle)
+			vval0 = self.geom.RotateRodriguez(self.vval[frame,self.Nval[frame],:],axis,rot_angle)
+			nval0 = self.geom.RotateRodriguez(self.nval[frame,self.Nval[frame],:],axis,rot_angle)
 			nval0=((nval0).transpose()/(np.sqrt(np.sum(nval0**2,axis=1))).transpose()).transpose()
 			self.rval[frame,self.Nval[frame],:]=rval0
 			self.vval[frame,self.Nval[frame],:]=vval0
