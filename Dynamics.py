@@ -99,7 +99,7 @@ class Dynamics(Configuration):
 				
 	# relative velocity distribution (and average velocity)
 	# component wise as well, assumes x and y directions only
-	def getVelDist(self,bins,bins2,usetype='all',):
+	def getVelDist(self,bins,bins2,usetype='all',verbose=True):
 		vav=np.zeros((self.Nsnap,))
 		vdist=np.zeros((len(bins)-1,))
 		vdist2=np.zeros((len(bins2)-1,))
@@ -120,6 +120,26 @@ class Dynamics(Configuration):
 			vdist2+=vdist20
 		vdist/=self.Nsnap
 		vdist2/=self.Nsnap
+		if verbose:
+			fig=plt.figure()
+			db=bins[1]-bins[0]
+			plt.semilogy(bins[1:]-db/2,vdist,'r.-',lw=2)
+			plt.xlabel('v/<v>')
+			plt.ylabel('P(v/<v>)')
+			plt.title('Scaled velocity magnitude distribution')
+			
+			fig=plt.figure()
+			db=bins2[1]-bins2[0]
+			plt.semilogy(bins2[1:]-db/2,vdist2,'r.-',lw=2)
+			plt.xlabel('v/<v>')
+			plt.ylabel('P(v/<v>)')
+			plt.title('Scaled velocity component distribution')
+			
+			xval=np.linspace(0,self.Nsnap*self.param.dt*self.param.dump['freq'],num=self.Nsnap)
+			plt.figure()
+			plt.plot(xval,vav,'r.-',lw=2)
+			plt.xlabel('time')
+			plt.ylabel('mean velocity')
 		return vav, vdist,vdist2		
 	
 		
@@ -145,9 +165,9 @@ class Dynamics(Configuration):
 					hmm=(self.drift[:smax,:]-self.drift[u:,:])
 					takeoff=np.einsum('j,ik->ijk',np.ones((self.Ntrack,)),hmm)
 				if self.geom.periodic:
-					dr=self.geom.ApplyPeriodic3d(self.rval[:smax,self.usethese,:]-self.rval[u:,self.usethese,:])-takeoff[self.usethese,:]
+					dr=self.geom.ApplyPeriodic3d(self.rval[:smax,self.usethese,:]-self.rval[u:,self.usethese,:])-takeoff[:,self.usethese,:]
 				else:
-					dr=self.rval[:smax,self.usethese,:]-self.rval[u:,self.usethese,:]-takeoff[self.usethese,:]
+					dr=self.rval[:smax,self.usethese,:]-self.rval[u:,self.usethese,:]-takeoff[:,self.usethese,:]
 			else:
 				if not self.complicated:
 					if self.geom.periodic:
@@ -172,7 +192,7 @@ class Dynamics(Configuration):
 			plt.loglog(xval,self.msd[1]/(1.0*xval[1])*xval,'-',lw=2,color=[0.5,0.5,0.5])
 			plt.xlabel('time')
 			plt.ylabel('MSD')
-			
+			plt.title('Mean square displacement')
 			#plt.show()
 		
 		return xval, self.msd
@@ -210,8 +230,8 @@ class Dynamics(Configuration):
 			fig=plt.figure()
 			plt.loglog(xval,self.velauto,'r.-',lw=2)
 			plt.xlabel('time')
-			plt.ylabel('Velocity autocorrelation')
-			
+			plt.ylabel('correlation')
+			plt.title('Normalised Velocity autocorrelation function')
 			#plt.show()
 		return xval, self.velauto, v2av
             
@@ -291,7 +311,7 @@ class Dynamics(Configuration):
 	
 	# Definition of the self-intermediate scattering function (Flenner + Szamel)
 	# 1/N <\sum_n exp(iq[r_n(t)-r_n(0)]>_t,n
-	def SelfIntermediate(self,qval,usetype='all',verbose=True):
+	def SelfIntermediate(self,qval,takeDrift,usetype='all',verbose=True):
 		# This is single particle, single q, shifted time step. Equivalent to the MSD, really
 		SelfInt=np.empty((self.Nsnap,),dtype=complex)
 		

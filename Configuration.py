@@ -256,6 +256,7 @@ class Configuration:
 			self.nval = nval
 			self.radius = radius
 			self.sigma = sigma
+			self.monodisperse = monodisperse
 			self.ptype = ptype
 			self.flag = flag
 		
@@ -357,7 +358,7 @@ class Configuration:
 			self.radius[u,:self.Nval[u]]=radius
 			self.ptype[u,:self.Nval[u]]=ptype
 			u+=1
-		
+		self.monodisperse=monodisperse
 		# Create the Interaction class
 		#__init__(self,param,sigma,ignore=False,debug=False):
 		self.inter=Interaction(self.param,self.sigma,self.ignore)
@@ -541,6 +542,9 @@ class Configuration:
 		return neighbours, drvec, radi, radj
 	      
 	def compute_energy_and_pressure(self,frame=1):
+		# Needs  mandatory cell list
+		# Do not try this at home if you're using large parts of the cornea
+		self.makeCellList(frame)
 		if self.multiopt=="single":
 			N = self.N
 		else:
@@ -634,7 +638,7 @@ class Configuration:
 		fourierval=np.zeros((nq,nq),dtype=complex)
 		
 		if self.multiopt=="single":
-			useparts = getUseparts(self,usetype)
+			useparts = self.getUseparts(usetype)
 			N = len(useparts)
 			for kx in range(nq):
 				for ky in range(nq):
@@ -642,7 +646,7 @@ class Configuration:
 					fourierval[kx,ky]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1])))/N
 			
 		else:
-			useparts = getUseparts(self,usetype,whichframe)
+			useparts = self.getUseparts(usetype,whichframe)
 			N = len(useparts)
 			for kx in range(nq):
 				for ky in range(nq):
@@ -661,13 +665,13 @@ class Configuration:
 			plt.figure()
 			plt.pcolor(qx,qy,plotval, vmin=0, vmax=3)
 			plt.colorbar()
-			plt.title('Positions')
+			plt.title('Static structure factor (2d)')
 			
 			plt.figure()
-			plt.plot(qrad,valrad)
+			plt.plot(qrad,valrad,'.-r',lw=2)
 			plt.xlabel('q')
 			plt.ylabel('S(q)')
-			plt.title('Positions')
+			plt.title('Static structure factor (radial)')
 			
 		return qrad,valrad
 	  
@@ -683,8 +687,7 @@ class Configuration:
 		# Note to self: only low q values will be interesting in any case. 
 		# The stepping is in multiples of the inverse box size. Assuming a square box.
 		print("Fourier transforming velocities")
-		# Note: Factor of 2 compared to static structure factor. Why?
-		dq=np.pi/L
+		dq=2*np.pi/L
 		nq=int(qmax/dq)
 		print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
@@ -692,14 +695,14 @@ class Configuration:
 		fourierval=np.zeros((nq,nq,2),dtype=complex)
 		
 		if self.multiopt=="single":
-			useparts = getUseparts(self,usetype)
+			useparts = self.getUseparts(usetype)
 			N = len(useparts)
 			for kx in range(nq):
 				for ky in range(nq):
 					fourierval[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1]))*self.vval[useparts,0])/N
 					fourierval[kx,ky,1]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1]))*self.vval[useparts,1])/N 
 		else:
-			useparts = getUseparts(self,usetype,whichframe)
+			useparts = self.getUseparts(usetype,whichframe)
 			N = len(useparts)
 			for kx in range(nq):
 				for ky in range(nq):
@@ -709,7 +712,7 @@ class Configuration:
 		# Sq = \vec{v_q}.\vec{v_-q}, assuming real and symmetric
 		# = \vec{v_q}.\vec{v_q*} = v
 		Sq=np.real(fourierval[:,:,0])**2+np.imag(fourierval[:,:,0])**2+np.real(fourierval[:,:,1])**2+np.imag(fourierval[:,:,1])**2
-		Sq=Nuse*Sq
+		Sq=N*Sq
 		# Produce a radial averaging to see if anything interesting happens
 		nq2=int(2**0.5*nq)
 		Sqrad=np.zeros((nq2,))
@@ -725,13 +728,10 @@ class Configuration:
 			valrad[l,1]=np.mean(plotval_y[ptsx[l],ptsy[l]])
 		if verbose:
 			plt.figure()
-			plt.pcolor(qx,qy,plotval_x)
-			plt.colorbar()
-			plt.title('Velocities - x')
-			plt.figure()
-			plt.pcolor(qx,qy,plotval_y)
-			plt.colorbar()
-			plt.title('Velocities - y')
+			plt.plot(qrad,Sqrad,'.-r',lw=2)
+			plt.xlabel('q')
+			plt.ylabel('correlation')
+			plt.title('Fourier space velocity correlation')
 		return qrad,valrad,Sqrad
 	
 	# Real space velocity correlation function
@@ -746,7 +746,7 @@ class Configuration:
 		velcount=np.zeros((npts,))
 		
 		if self.multiopt=="single":
-			useparts = getUseparts(self,usetype)
+			useparts = self.getUseparts(usetype)
 			N = len(useparts)
 			velav=np.sum(self.vval[useparts,:],axis=0)/N
 			for k in range(N):
@@ -758,7 +758,7 @@ class Configuration:
 					velcorr[l]+=sum(vdot[pts])
 					velcount[l]+=len(pts)
 		else:
-			useparts = getUseparts(self,usetype,whichframe)
+			useparts = self.getUseparts(usetype,whichframe)
 			N = len(useparts)
 			velav=np.sum(self.vval[whichframe,useparts,:],axis=0)/N
 			for k in range(N):
@@ -775,10 +775,11 @@ class Configuration:
 		if verbose:
 			fig=plt.figure()
 			isdata=[index for index, value in enumerate(velcount) if value>0]
-			plt.plot(bins[isdata],velcorr[isdata],'.-')
+			plt.plot(bins[isdata],velcorr[isdata],'.-r',lw=2)
 			#plt.show()
 			plt.xlabel("r-r'")
 			plt.ylabel('Correlation')
+			plt.title('Spatial velocity correlation')
 		return bins,velcorr
 
 	

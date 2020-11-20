@@ -35,7 +35,7 @@ class CellList:
 		#self.box = box
 		self.cell_indices = {}
 		if rmin == 'default':
-			self.xmin = - 0.5*self.geom.Lz
+			self.xmin = - 0.5*self.geom.Lx
 			self.ymin = - 0.5*self.geom.Ly
 			self.zmin = - 0.5*self.geom.Lz
 		else:
@@ -43,7 +43,7 @@ class CellList:
 			self.ymin = rmin[1]
 			self.zmin = rmin[2]
 		if rmax == 'default':
-			self.xmax = 0.5*self.geom.Lz
+			self.xmax = 0.5*self.geom.Lx
 			self.ymax = 0.5*self.geom.Ly
 			self.zmax = 0.5*self.geom.Lz
 		else:
