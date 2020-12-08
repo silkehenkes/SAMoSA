@@ -22,13 +22,59 @@ class Topology(Configuration):
 		if not self.multiopt == "many":
 			print("Topology:: Error: Cannot run full topology without reading in multiple files! Use manual Configuration / Tesselation / Defect for a single file instead.")
 			sys.exit()
+			
+	def getBirthDeath(self,inisnap,dsnap=1,debug=False):
+		flag1=list(self.flag[inisnap,:self.Nval[inisnap]].astype(int))
+		flag2=list(self.flag[inisnap+dsnap,:self.Nval[inisnap+dsnap]].astype(int))
+		
+		# particles who have died first. Infer the death place as their last position
+		deaths=[]
+		runidx=0
+		for u in range(self.Nval[inisnap]):
+			# The particle existed in the first set. Run down the flag of the second set. Flags are in increasing order. I will either hit it or else the particle has died
+			flagi = flag1[u]
+			while flag2[runidx]<flagi:
+				runidx +=1
+			# Now it's either hit it or it's bigger. If it is bigger, the particle has died
+			if flag2[runidx]>flagi:
+				if debug:
+					print("Particle " + str(u) + " with flag " + str(flagi) + " has died.")
+				deaths.append(u)
+				
+		deathpos = self.rval[inisnap,deaths]
+		deathflag = self.flag[inisnap,deaths].astype(int)
+				
+		# Same thing in reverse for births: 
+		# Well no: they are all at the end. Categorically true: Any higher labels are new cells
+		# Method: Check where the last particle in flag1 is in flag2. That's the starting  point of new cells
+		# if it's not there, it has died and therefore go backwards in flag1 until we find one that didn't die
+		found = False
+		startpt = self.Nval[inisnap]-1
+		while not found:
+			maxflag = int(flag1[startpt])
+			if debug:
+				print(maxflag)
+			try:
+				bornidx = flag2.index(maxflag)
+				found = True
+			except ValueError:
+				startpt = startpt-1
+				
+		births = range((bornidx+1),self.Nval[inisnap+dsnap])
+		
+				
+		birthpos = self.rval[inisnap+dsnap,births]
+		birthflag = self.flag[inisnap+dsnap,births].astype(int)
+		if debug:
+			print(birthflag)
+	
+		return birthflag, deathflag, birthpos, deathpos
+							   
 		
 	def getFlowField(self,inisnap,dsnap=1,debug=False):
 		# attempt to compute the flow field between two snapshots, based on the uniquely labeled particles present in both
 		flag1=list(self.flag[inisnap,:self.Nval[inisnap]])
-		print("Computed flag 1")
 		flag2=list(self.flag[inisnap+dsnap,:self.Nval[inisnap+dsnap]])
-		print("Computed flag 2")
 		
 		#index=[]
 		runidx=0
@@ -44,23 +90,8 @@ class Topology(Configuration):
 				#index.append(flagi)
 				useparts1.append(u)
 				useparts2.append(runidx)
-		print("Computed useparts1 and 2")		
-		#print(index)
-		#print(useparts1)
-		#print(useparts2)
-		
-		## 29.09.20: Won't cut the mustard on speed with the cornea, need to do without search
-		## First use intersection of flag1 and flag2 to find particles that exist in both. There are no duplicates and we don't care about order, so use sets.
-		#index = list(set(flag1) & set(flag2))
-		#print("Computed index")
-		
-		## Now we just need to tell the system where to find those.
-		## This *does* rely on the order of particles not getting jumbled up. Correct for samos because new particles get stuck to the end.
-		#useparts1 = [ idx for idx,val in enumerate(flag1) if val in index]
-		#print("Computed useparts1")
-		#useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
-		#print("Computed useparts2")
-		
+		if debug:
+			print("Computed useparts1 and 2")		
 		
 		# Make this the actual displacement field
 		flowField = (self.rval[inisnap+dsnap,useparts2,:]-self.rval[inisnap,useparts1,:])
@@ -69,14 +100,10 @@ class Topology(Configuration):
 		nsnap = dsnap+1
 		polarField = self.nval[inisnap,useparts1,:]/nsnap
 	
-		#for u in range(1,nsnap):
-			#print('Starting polar director averaging snapshop',u)
-			#flag2=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
-			#useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
-			#polarField = polarField +  self.nval[inisnap+u,useparts2,:]/nsnap
 			
 		for u in range(1,nsnap):
-			print('Starting polar director averaging snapshop',u)
+			if debug:
+				print('Starting polar director averaging snapshop',u)
 			flag3=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
 			#index=[]
 			runidx=0
@@ -96,11 +123,8 @@ class Topology(Configuration):
 				# But for this version, append the index of the middle snaphshot
 				# If the particle has died by the final frame, runidx2 will just be thrown away
 				if flag2[runidx] == flagi:
-					#index.append(flagi)
-					#useparts1.append(u)
 					useparts2.append(runidx3)
 				
-			#useparts2 = [ idx for idx,val in enumerate(flag2) if val in index]
 			polarField = polarField +  self.nval[inisnap+u,useparts2,:]/nsnap
 			
 		# need to normalise again for tracking
@@ -289,7 +313,7 @@ class Topology(Configuration):
 	
 	# Reorient configuation based on the position of a defect (as a simple coordinate triplet)
 	# For Cornea, but potentially for other things too 
-	def redressTiltDefect(self,child,defectpos,debug=False):
+	def redressTiltDefect(self,child,defectpos,births='none',deaths='none',debug=False):
 		
 		# The direction of our symmetry axis is the defect position now
 		direction=defectpos/np.linalg.norm(defectpos)
@@ -322,15 +346,57 @@ class Topology(Configuration):
 		# def rotateFrame(self,axis,rot_angle,frame=1,makeCellList=True):
 		child.rotateFrame(axis0,rot_angle,1,False)
 		
-		return axis, rot_angle
+		## Same thing for the positions of the birth and death objects
+		BirthDeath=False
+		if not births=='none':
+			BirthDeath=True
+			axis0 = np.empty((len(births[:,0]),3))
+			axis0[:,0] = axis[0]
+			axis0[:,1] = axis[1]
+			axis0[:,2] = axis[2]
+			births = child.geom.RotateRodriguez(births,axis0,rot_angle)
+		if not deaths=='none':
+			BirthDeath=True
+			axis0 = np.empty((len(deaths[:,0]),3))
+			axis0[:,0] = axis[0]
+			axis0[:,1] = axis[1]
+			axis0[:,2] = axis[2]
+			deaths = child.geom.RotateRodriguez(deaths,axis0,rot_angle)
+		
+		if BirthDeath:
+			return axis, rot_angle, births, deaths
+		else:
+			return axis, rot_angle
 
-	def unTilt(self,child,axis,rot_angle):
+	def unTilt(self,child,axis,rot_angle,births='none',deaths='none'):
 		axis0 = np.empty((child.N,3))
 		axis0[:,0] = axis[0]
 		axis0[:,1] = axis[1]
 		axis0[:,2] = axis[2]
 		
 		child.rotateFrame(axis0,-rot_angle,1,False)
+		
+		## Same thing for the positions of the birth and death objects
+		BirthDeath=False
+		if not births=='none':
+			BirthDeath=True
+			axis0 = np.empty((len(births[:,0]),3))
+			axis0[:,0] = axis[0]
+			axis0[:,1] = axis[1]
+			axis0[:,2] = axis[2]
+			births = child.geom.RotateRodriguez(births,axis0,-rot_angle)
+		if not deaths=='none':
+			BirthDeath=True
+			axis0 = np.empty((len(deaths[:,0]),3))
+			axis0[:,0] = axis[0]
+			axis0[:,1] = axis[1]
+			axis0[:,2] = axis[2]
+			deaths = child.geom.RotateRodriguez(deaths,axis0,-rot_angle)
+			
+		if BirthDeath:
+			return births, deaths
+		
+		
 	
 	# Cornea profiles: Simpler, to be able to compare to the experiments
 	# Directly adapted from corresponding code
@@ -368,11 +434,11 @@ class Topology(Configuration):
 		swirlerr=np.zeros((nbin,))
 		inhist=np.zeros((nbin,))
 		inerr=np.zeros((nbin,))
-		isdata=[]
+		isdata=np.zeros((nbin,))
 		for b in range(nbin):
 			inbin=np.where(binval==b)
-			if len(inbin)>0:
-				isdata.append(b)
+			if len(inbin[0])>0:
+				isdata[b]=1
 				swirlhist[b]=np.mean(swirl[inbin])
 				swirlerr[b]=np.std(swirl[inbin])/np.sqrt(len(inbin))
 				inhist[b]=np.mean(inward[inbin])
@@ -380,8 +446,9 @@ class Topology(Configuration):
 		
 		if verbose:
 			plt.figure()
-			plt.errorbar(thetabin[isdata]+dtheta/2,swirlhist[isdata],swirlerr[isdata],marker='o',color='r',label='swirl')
-			plt.errorbar(thetabin[isdata]+dtheta/2,inhist[isdata],inerr[isdata],marker='o',color='g',label='inward')
+			havepts=np.where(isdata>0)
+			plt.errorbar(thetabin[havepts]+dtheta/2,swirlhist[havepts],swirlerr[havepts],marker='o',color='r',label='swirl')
+			plt.errorbar(thetabin[havepts]+dtheta/2,inhist[havepts],inerr[havepts],marker='o',color='g',label='inward')
 			plt.xlabel('theta')
 			plt.ylabel('flow component ' + str(field))
 			plt.legend()
@@ -391,8 +458,81 @@ class Topology(Configuration):
 	# Compute the flux through the boundaries by concentric rings around the defect
 	# In particular, look through imbalance of fluxes from division / death
 	# Needs to happen on the velocity field (aka already displacement field
-	def computeFlux(self,child,thetamax =70/360.0*2*np.pi,nbin=50,verbose=False):
-		pass
+	def computeFlux(self,child,births,deaths,thetamax =70/360.0*2*np.pi,verbose=False):
+		# Per radial bin, compute:
+		# Number of inflow (from displacement field)
+		# Number of outflow (from displacement field)
+		# Number of births
+		# Number of deaths
+		
+		# Hardcode a sensible binning of 1 particles wide (child.conf.sigma)
+		nbin = int(child.geom.R*thetamax/(2*child.sigma))
+		print(nbin)
+		thetabin=np.linspace(0,thetamax,nbin)
+		dtheta=thetabin[1]-thetabin[0]
+		
+		# Mean slice velocity and angle
+		theta,phi,etheta,ephi = child.getTangentBundle()
+		# bins of individual surviving particles
+		binval = (np.floor(theta/dtheta)).astype(int)
+		
+		# bin of births
+		# Need the tangent bundle as well ...
+		birththeta,bphi,betheta,bephi=child.geom.TangentBundle(births)
+		birthbin = (np.floor(birththeta/dtheta)).astype(int)
+		print(birthbin)
+		# bin of deaths
+		deaththeta,dphi,detheta,dephi=child.geom.TangentBundle(deaths)
+		deathbin = (np.floor(deaththeta/dtheta)).astype(int)
+		print(deathbin)
+		
+		velflux=np.zeros((nbin,))
+		birthcount=np.zeros((nbin,))
+		deathcount=np.zeros((nbin,))
+		velav=np.zeros((nbin,))
+		vel2av=np.zeros((nbin,))
+		velproj=np.zeros((nbin,))
+		alpha=np.zeros((nbin,))
+		isdata=np.zeros((nbin,))
+		for b in range(nbin):
+			inbin=np.where(binval==b)
+			if len(inbin[0])>0:
+				isdata[b]=1
+				# Locate inflow and outflow: First project onto etheta
+				radflow = -(child.vval[inbin,0]*etheta[inbin,0]+child.vval[inbin,1]*etheta[inbin,1]+child.vval[inbin,2]*etheta[inbin,2])
+				# and ephi for the tangential bits [minus sign because etheta points outward]
+				tanflow = -(child.vval[inbin,0]*ephi[inbin,0]+child.vval[inbin,1]*ephi[inbin,1]+child.vval[inbin,2]*ephi[inbin,2])
+				# We will not do discrete counting, but rather use that projection directly:
+				# inflow-outflow = -sum(radflow)/(R*dtheta) 
+				velflux[b]= np.sum(radflow)/(child.geom.R*dtheta)
+				# mean actual velocity vector
+				vrad = np.average(radflow)
+				vtan = np.average(tanflow)
+				velproj[b]=vrad
+				velav[b] = np.sqrt(vrad**2+vtan**2)
+				alpha[b] = np.arctan2(vtan,vrad)
+				vel2av[b] = np.sqrt(np.average(radflow**2 + tanflow**2))
+			binbin=np.where(birthbin==b)
+			birthcount[b]=len(binbin[0])
+			dinbin=np.where(deathbin==b)
+			deathcount[b]=len(dinbin[0])
+			
+		if verbose:
+			plt.figure()
+			havepts=np.where(isdata>0)
+			plt.plot(thetabin[havepts]+dtheta/2,velflux[havepts],marker='x',color='m',label='flux')
+			plt.plot(thetabin[havepts]+dtheta/2,velav[havepts],marker='o',color='r',label='vav')
+			plt.plot(thetabin[havepts]+dtheta/2,velproj[havepts],marker='.',color='k',label='velproj')
+			plt.plot(thetabin[havepts]+dtheta/2,alpha[havepts],marker='o',color='g',label='alpha')
+			plt.plot(thetabin[havepts]+dtheta/2,vel2av[havepts],marker='o',color='b',label='v2av')
+			plt.plot(thetabin+dtheta/2,birthcount,marker='s',color='k',label='birth')
+			plt.plot(thetabin+dtheta/2,deathcount,marker='s',color='y',label='death')
+			plt.xlabel('theta')
+			plt.ylabel('quantity')
+			plt.legend()
+			
+		return thetabin, isdata, velflux, velav, velproj, alpha, vel2av, birthcount, deathcount
+			
 	
 	# compute the profiles of everything on a sphere
 	# TO DO: Either adapt or second version to work on cornea swirl and inward measures
