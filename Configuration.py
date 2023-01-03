@@ -97,12 +97,9 @@ class Configuration:
 			if redobox:
 				rmin = np.zeros((3,))
 				rmax = np.zeros((3,))
-				rmin[0] = np.amin(self.rval[:,0])-self.sigma
-				rmin[1] = np.amin(self.rval[:,1])-self.sigma
-				rmin[2] = np.amin(self.rval[:,2])-self.sigma
-				rmax[0] = np.amax(self.rval[:,0])+self.sigma
-				rmax[1] = np.amax(self.rval[:,1])+self.sigma
-				rmax[2] = np.amax(self.rval[:,2])+self.sigma
+				for j in range(3):
+					rmin[j] = np.amin(self.rval[:,j])-self.sigma
+					rmax[j] = np.amax(self.rval[:,j])+self.sigma
 				# def makeCellList(self,frame=1,rmin='default',rmax='default'):
 				self.makeCellList(1,rmin,rmax)
 			else:
