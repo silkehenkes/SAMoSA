@@ -17,6 +17,7 @@ class Dynamics(Configuration):
 		# same types of particles in a given instance.
 		# If a problem, can always set it to 'False' again from outside
 		self.tracked = False
+		self.canDrift = False
 	
 	# By design, this is only meaningful on the whole data set, e.g. do not subtract for tracer particles only
 	def takeDrift(self):
@@ -29,7 +30,8 @@ class Dynamics(Configuration):
 				drift0=np.sum(dr,axis=0)/self.N
 				self.drift[u,:]=self.drift[u-1,:]+drift0
 				#print self.drift[u,:]
-			
+			self.canDrift = True
+		# so as to stop trying to do stuff	
 	# Compute average positions and create a sub-configuration to feed to the Hessian
 	def makeAverageChild(self,usetype):
 		if self.Nvariable:
@@ -55,6 +57,8 @@ class Dynamics(Configuration):
 	# Tracking a subset of particles: This identifies the relevant ones
 	# and gives an error if that number changes or the flags don't match
 	# complicated: if the particles we are aiming to track move around in their list index
+	# Conceptual debug January 4 2023: Needs 'complicated' even if it shifts around as a block (without switching positions in reduced list)
+	# Which is standard behaviour if it was printed at the bottom of the input file.
 	def getTrack(self,usetype):
 		if usetype == 'all':
 			if self.Nvariable:
@@ -66,21 +70,29 @@ class Dynamics(Configuration):
 				self.complicated = False
 		else:
 			useparts = self.getUseparts(usetype,0)
-			flag0 = self.flag(0,useparts)
+			flag0 = self.flag[0,useparts]
 			self.Ntrack = len(useparts)
-			usethese0 = np.empty((self.Nsnap,self.Ntrack))
+			usethese0 = np.empty((self.Nsnap,self.Ntrack),dtype='int')
 			# If the positions of our flagged particles are jumping around, we are in deep doodoo for vectorisation
 			self.complicated = False
 			for u in range(0,self.Nsnap):
+				#print("Looking at snapshot" + str(u))
+				useparts0 = useparts 
 				useparts = self.getUseparts(usetype,u)
 				N = len(useparts)
 				if N != self.Ntrack:
 					print("Dynamics::getTrack - Error: Number of tracked particles is changing, check that chosen type is not dividing or dying!")
 					sys.exit()
-				flag = self.flag(u,useparts)
-				# Check that 1. These are the same labels at the same places. Can continue to use vectorisation in that case
-				if not np.array.equal(flag,flag0):
-					self.complicated = True
+				# preliminarily, stick array as is into usethese0. Revise if relabeled.
+				usethese0[u,:] = useparts
+				# Check that 1. These are the same labels at the same places. Can continue to use simple vectorisation in that case
+				# Else see if it's a shifted block or a rearrangement
+				if not np.array_equal(useparts,useparts0):
+					self.complicated=True
+				flag = self.flag[u,useparts]
+				if not np.array_equal(flag,flag0):
+					# it's already complicated like this!
+					#self.complicated = True
 					# However, they could still be there, but relabeled. Then things are non-vectorisable, but possible, though slow
 					if set(flag) == set(flag0):
 						# now we need to get useparts in the same order as the initial flags
@@ -95,6 +107,7 @@ class Dynamics(Configuration):
 				self.usethese = usethese0
 			else:
 				self.usethese = useparts
+		self.tracked=True
 				
 				
 	# relative velocity distribution (and average velocity)
@@ -157,7 +170,8 @@ class Dynamics(Configuration):
 		for u in range(self.Nsnap):	
 			smax=self.Nsnap-u
 			# Note that by design, take drift needs to work on the whole data set
-			if takeDrift:
+			# so take drift only if 1) we want to 2) it's possible to calculate it
+			if takeDrift and self.canDrift:
 				if self.complicated:
 					print("Dynamics::getMSD - Taking off drift at constant N while complicated labels: My head is hurting, stopping here. Reconsider what you're doing ... it's probably wrong")
 					sys.exit()
@@ -198,7 +212,7 @@ class Dynamics(Configuration):
 		return xval, self.msd
             
 	# Velocity autocorrelation function
-	def getVelAuto(self,usetype='all',verbose=True):
+	def getVelAuto(self,usetype='all',verbose=False):
 		self.velauto=np.empty((self.Nsnap,))
 		v2av=np.empty((self.Nsnap,))
 		
@@ -220,9 +234,9 @@ class Dynamics(Configuration):
 			if self.complicated:
 				print("Dynamics::getVelAuto - Warning: Complicated relabeling: This is slow, make sure to only track a few particles") 
 				for s in range(smax):
-					self.velauto[u] += np.sum(vnormed[s,list(self.usethese[s,:]),0]*vnormed[u+s,list(self.usethese[s,:]),0]+vnormed[s,list(self.usethese[s,:]),1]*vnormed[u+s,list(self.usethese[s,:]),1]+vnormed[s,list(self.usethese[s,:]),2]*vnormed[u+s,list(self.usethese[s,:]),2])/(self.Ntrack*smax)
+					self.velauto[u] += np.sum(vnormed[s,:,0]*vnormed[u+s,:,0]+vnormed[s,:,1]*vnormed[u+s,:,1]+vnormed[s,:,2]*vnormed[u+s,:,2])/(self.Ntrack*smax)
 			else:
-				self.velauto[u]=np.sum(np.sum((vnormed[:smax,self.usethese,0]*vnormed[u:,self.usethese,0]+vnormed[:smax,self.usethese,1]*vnormed[u:,self.usethese,1]+vnormed[:smax,self.usethese,2]*vnormed[u:,self.usethese,2]),axis=1),axis=0)/(self.Ntrack*smax)
+				self.velauto[u]=np.sum(np.sum((vnormed[:smax,:,0]*vnormed[u:,:,0]+vnormed[:smax,:,1]*vnormed[u:,:,1]+vnormed[:smax,:,2]*vnormed[u:,:,2]),axis=1),axis=0)/(self.Ntrack*smax)
 
                                 
 		xval=np.linspace(0,self.Nsnap*self.param.dt*self.param.dump['freq'],num=self.Nsnap)
@@ -256,7 +270,7 @@ class Dynamics(Configuration):
 		for u in range(self.Nsnap):	
 			smax=self.Nsnap-u
 			# Note that by design, take drift needs to work on the whole data set
-			if takeDrift:
+			if takeDrift and self.canDrift:
 				if self.complicated:
 					print("Dynamics::getNonGaussian - Taking off drift at constant N while complicated labels: My head is hurting, stopping here. Reconsider what you're doing ... it's probably wrong")
 					sys.exit()
@@ -311,7 +325,7 @@ class Dynamics(Configuration):
 	
 	# Definition of the self-intermediate scattering function (Flenner + Szamel)
 	# 1/N <\sum_n exp(iq[r_n(t)-r_n(0)]>_t,n
-	def SelfIntermediate(self,qval,takeDrift,usetype='all',verbose=True):
+	def SelfIntermediate(self,qval,takeDrift,usetype='all',verbose=False):
 		# This is single particle, single q, shifted time step. Equivalent to the MSD, really
 		SelfInt=np.empty((self.Nsnap,),dtype=complex)
 		
@@ -320,7 +334,7 @@ class Dynamics(Configuration):
 			
 		for u in range(self.Nsnap):
 			smax=self.Nsnap-u
-			if takeDrift:
+			if takeDrift and self.canDrift:
 				if self.complicated:
 					print("Dynamics::SelfIntermediate - Taking off drift at constant N while complicated labels: My head is hurting, stopping here. Reconsider what you're doing ... it's probably wrong")
 					sys.exit()
@@ -332,7 +346,7 @@ class Dynamics(Configuration):
 				else:
 					SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0]+takeoff[:,self.usethese,0])+1.0j*qval[1]*(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1]+takeoff[:,self.usethese,1])+1.0j*qval[2]*(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2]+takeoff[:,self.usethese,2])),axis=1),axis=0)/(self.Ntrack*smax)
 			else:
-				if complicated:
+				if self.complicated:
 					for s in range(smax):
 						ps = list(self.usethese[s,:])
 						pu = list(self.usethese[u+s,:])

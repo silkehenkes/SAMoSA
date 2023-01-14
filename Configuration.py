@@ -221,6 +221,8 @@ class Configuration:
 			else:
 				print("Error: looking for data with types " + str(readtypes) + " but data has no type information.")
 				sys.exit()
+		# cast to integer to make sure
+		ptype = ptype.astype(int)
 		
 		rval = np.column_stack((x[useparts],y[useparts],z[useparts]))
 		vval = np.column_stack((vx[useparts],vy[useparts],vz[useparts]))
@@ -337,7 +339,7 @@ class Configuration:
 		self.nval=np.zeros((self.Nsnap,self.N,3))
 		self.flag=np.zeros((self.Nsnap,self.N))
 		self.radius=np.zeros((self.Nsnap,self.N))
-		self.ptype=np.zeros((self.Nsnap,self.N))
+		self.ptype=np.zeros((self.Nsnap,self.N),dtype='int')
 		u=0
 		self.sigma = 0.0
 		for f in files:
@@ -377,6 +379,8 @@ class Configuration:
 			if self.multiopt=="single":
 				ptype = self.ptype
 			else:
+				print(frame)
+				print(self.Nval[frame])
 				ptype = self.ptype[frame,:self.Nval[frame]]
 			useparts=[]
 			for v in range(len(ptype)):
@@ -386,7 +390,13 @@ class Configuration:
 				print("Configuration::getUseparts - Warning: no particles of the desired type(s) " + str(usetype))
 			return useparts
 			
-		
+	# Just a printing helper function to see what my configuration is doing
+	def printDiagnostic(self):
+		print("Diagnostic of configuration: Set up to work on " + self.multiopt + " files.")
+		if self.multiopt=="single":
+			print("Working on " + str(self.N) + " particles of types " + str(np.unique(self.ptype)))
+		else:
+			print("Working with " + str(self.Nsnap) + " frames, with on average " + str(np.average(self.Nval)) + " particles of type " + str(np.unique(self.ptype)))
 					
 	# create Cell list, but only ever for a single frame (?)
 	def makeCellList(self,frame=1,rmin='default',rmax='default'):
@@ -559,6 +569,20 @@ class Configuration:
 			press[neighbours]+=press_val
 		return [eng, press, ncon,stress]
 	
+	# Because surprisingly it's nowhere else!
+	# only meaningful on a plane, but enable generically
+	# returns 3-vectors, take magnitude for order parameter
+	def getVicsek(self,frame=1):
+		if self.multiopt=="single":
+			dirvicsek = np.average(self.nval[:self.N,:],axis=0)
+			vel2av = np.average(self.vval[:self.N,0]**2+self.vval[:self.N,1]**2+self.vval[:self.N,2]**2)
+			velvicsek = np.average(self.vval,axis=0)/np.sqrt(vel2av)
+		else:
+			dirvicsek = np.average(self.nval[frame,:self.Nval[frame],:],axis=0)
+			vel2av = np.average(self.vval[frame,:self.Nval[frame],0]**2+self.vval[frame,:self.Nval[frame],1]**2+self.vval[frame,:self.Nval[frame],2]**2)
+			velvicsek = np.average(self.vval[frame,:self.Nval[frame],:],axis=0)/np.sqrt(vel2av)
+		return dirvicsek, velvicsek
+
 	
 	# Basic statistics (mean velocity, density, pressure, stress)
 	def getStatsBasic(self,frame=1):
@@ -616,7 +640,7 @@ class Configuration:
 	
 	# Static structure factor
 	# Which is implicitly in 2D!!
-	def FourierTrans(self,qmax=0.3,whichframe=1,usetype='all',L="default",verbose=True):
+	def FourierTrans(self,qmax=0.3,whichframe=1,usetype='all',L="default",verbose=False):
 		
 		if L=="default":
 			L = self.geom.Lx
@@ -673,7 +697,7 @@ class Configuration:
 		return qrad,valrad
 	  
 	
-	def FourierTransVel(self,qmax=0.3,whichframe=1,usetype='all',L="default",verbose=True):
+	def FourierTransVel(self,qmax=0.3,whichframe=1,usetype='all',L="default",verbose=False):
 		
 		if L=="default":
 			L = self.geom.Lx
