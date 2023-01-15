@@ -18,6 +18,7 @@ class Dynamics(Configuration):
 		# If a problem, can always set it to 'False' again from outside
 		self.tracked = False
 		self.canDrift = False
+		self.hasAverage = False
 	
 	# By design, this is only meaningful on the whole data set, e.g. do not subtract for tracer particles only
 	def takeDrift(self):
@@ -32,6 +33,12 @@ class Dynamics(Configuration):
 				#print self.drift[u,:]
 			self.canDrift = True
 		# so as to stop trying to do stuff	
+
+	# just compute averages once and for all 
+	def makeAverage(self):
+		self.raverage  = np.mean(self.rval[:,:,:],axis=0)
+		self.hasAverage = True
+
 	# Compute average positions and create a sub-configuration to feed to the Hessian
 	def makeAverageChild(self,usetype):
 		if self.Nvariable:
@@ -179,9 +186,9 @@ class Dynamics(Configuration):
 					hmm=(self.drift[:smax,:]-self.drift[u:,:])
 					takeoff=np.einsum('j,ik->ijk',np.ones((self.Ntrack,)),hmm)
 				if self.geom.periodic:
-					dr=self.geom.ApplyPeriodic3d(self.rval[:smax,self.usethese,:]-self.rval[u:,self.usethese,:])-takeoff[:,self.usethese,:]
+					dr=self.geom.ApplyPeriodic3d(self.rval[:smax,self.usethese,:]-self.rval[u:,self.usethese,:])-takeoff[:,:,:]
 				else:
-					dr=self.rval[:smax,self.usethese,:]-self.rval[u:,self.usethese,:]-takeoff[:,self.usethese,:]
+					dr=self.rval[:smax,self.usethese,:]-self.rval[u:,self.usethese,:]-takeoff[:,:,:]
 			else:
 				if not self.complicated:
 					if self.geom.periodic:
@@ -214,7 +221,7 @@ class Dynamics(Configuration):
 	# Velocity autocorrelation function
 	def getVelAuto(self,usetype='all',verbose=False):
 		self.velauto=np.empty((self.Nsnap,))
-		v2av=np.empty((self.Nsnap,))
+		self.v2av=np.empty((self.Nsnap,))
 		
 		if not self.tracked:
 			self.getTrack(usetype)
@@ -223,11 +230,11 @@ class Dynamics(Configuration):
 		vnormed = np.zeros((self.Nsnap,self.Ntrack,3))
 		for u in range(self.Nsnap):
 			if self.complicated:
-				v2av[u]=np.sum(np.sum((self.vval[u,list(self.usethese[u,:]),:])**2,axis=1),axis=0)/(self.Ntrack)
-				vnormed[u,:,:]=self.vval[u,list(self.usethese[u,:]),:]/np.sqrt(v2av[u])
+				self.v2av[u]=np.sum(np.sum((self.vval[u,list(self.usethese[u,:]),:])**2,axis=1),axis=0)/(self.Ntrack)
+				vnormed[u,:,:]=self.vval[u,list(self.usethese[u,:]),:]/np.sqrt(self.v2av[u])
 			else:
-				v2av[u]=np.sum(np.sum((self.vval[u,self.usethese,:])**2,axis=1),axis=0)/(self.Ntrack)
-				vnormed[u,:,:]=self.vval[u,self.usethese,:]/np.sqrt(v2av[u])
+				self.v2av[u]=np.sum(np.sum((self.vval[u,self.usethese,:])**2,axis=1),axis=0)/(self.Ntrack)
+				vnormed[u,:,:]=self.vval[u,self.usethese,:]/np.sqrt(self.v2av[u])
 				
 		for u in range(self.Nsnap):
 			smax=self.Nsnap-u
@@ -242,13 +249,109 @@ class Dynamics(Configuration):
 		xval=np.linspace(0,self.Nsnap*self.param.dt*self.param.dump['freq'],num=self.Nsnap)
 		if verbose:
 			fig=plt.figure()
-			plt.loglog(xval,self.velauto,'r.-',lw=2)
+			plt.plot(xval,self.velauto,'r.-',lw=2)
 			plt.xlabel('time')
 			plt.ylabel('correlation')
 			plt.title('Normalised Velocity autocorrelation function')
 			#plt.show()
-		return xval, self.velauto, v2av
-            
+		return xval, self.velauto, self.v2av
+
+	# Director autocorrelation function (oscillating systems)
+	def getDirAuto(self,usetype='all',verbose=False):
+		# n dot n cos of angle
+		self.dirauto=np.empty((self.Nsnap,))
+		# while we are here, ocmpute chiral measure omega (rotation speed)
+		# estimated from snapshots: theta = np.artcan2(ny,nx), omega = dtheta/dt, modulo 2pi
+		self.omega = np.empty((self.Nsnap))
+		if not self.tracked:
+			self.getTrack(usetype)
+			
+		# Extract what we want just for ease of writing
+		nnuse = np.zeros((self.Nsnap,self.Ntrack,3))
+		for u in range(self.Nsnap):
+			if self.complicated:
+				nnuse[u,:,:]=self.nval[u,list(self.usethese[u,:]),:]
+			else:
+				nnuse[u,:,:]=self.nval[u,self.usethese,:]
+				
+		for u in range(self.Nsnap):
+			smax=self.Nsnap-u
+			if self.complicated:
+				print("Dynamics::getVelAuto - Warning: Complicated relabeling: This is slow, make sure to only track a few particles") 
+				for s in range(smax):
+					self.dirauto[u] += np.sum(nnuse[s,:,0]*nnuse[u+s,:,0]+nnuse[s,:,1]*nnuse[u+s,:,1]+nnuse[s,:,2]*nnuse[u+s,:,2])/(self.Ntrack*smax)
+			else:
+				self.dirauto[u]=np.sum(np.sum((nnuse[:smax,:,0]*nnuse[u:,:,0]+nnuse[:smax,:,1]*nnuse[u:,:,1]+nnuse[:smax,:,2]*nnuse[u:,:,2]),axis=1),axis=0)/(self.Ntrack*smax)
+		# chiral rotation rate
+		omega = np.zeros((self.Nsnap-1))
+		absomega = np.zeros((self.Nsnap-1))
+		for u in range(1,self.Nsnap):
+			theta = np.arctan2(nnuse[u,:,1],nnuse[u,:,0])
+			theta_m1 = np.arctan2(nnuse[u-1,:,1],nnuse[u-1,:,0])
+			dtheta = theta-theta_m1
+			isperiodic = np.where(np.abs(dtheta)>np.pi)[0]
+			dtheta[isperiodic] -=2*np.pi*np.sign(dtheta[isperiodic])
+			omega[u-1] = np.average(dtheta)/self.param.dt
+			absomega[u-1] = np.sqrt(np.average(dtheta**2))/self.param.dt
+                
+		xval=np.linspace(0,self.Nsnap*self.param.dt*self.param.dump['freq'],num=self.Nsnap)
+		if verbose:
+			fig=plt.figure()
+			plt.plot(xval,self.dirauto,'r.-',lw=2)
+			plt.plot(xval[1:],omega,'k.-',lw=2)
+			plt.plot(xval[1:],absomega,'g.-',lw=2)
+			plt.xlabel('time')
+			plt.ylabel('correlation')
+			plt.title('Normalised Director autocorrelation function')
+			#plt.show()
+		return xval, self.dirauto,omega,absomega
+
+	# And for good measuer, diplacement correlators (implicitly assumes that we are glassy and that temporal mean = potential bottom)
+	def getDispAuto(self,usetype='all',verbose=False):
+		self.dispauto=np.empty((self.Nsnap,))
+		self.disp2av=np.empty((self.Nsnap,))
+		
+		if not self.tracked:
+			self.getTrack(usetype)
+		if not self.hasAverage:
+			self.makeAverage()
+			
+		# First compute normalised velocities. Note: normalised by mean velocity in the whole system at that time, not unit vectors!
+		dispnormed = np.zeros((self.Nsnap,self.Ntrack,3))
+		for u in range(self.Nsnap):
+			
+			if self.complicated:
+				if self.geom.periodic:
+					dr=self.geom.ApplyPeriodic2d(self.rval[u,list(self.usethese[u,:]),:]-self.raverage[list(self.usethese[u,:]),:])
+				else:
+					dr=self.rval[u,list(self.usethese[u,:]),:]-self.raverage[list(self.usethese[u,:]),:]
+			else:
+				if self.geom.periodic:
+					dr=self.geom.ApplyPeriodic2d(self.rval[u,self.usethese,:]-self.raverage[self.usethese,:])
+				else:
+					dr=self.rval[u,self.usethese,:]-self.raverage[self.usethese,:]
+			self.disp2av[u]=np.sum(np.sum((dr)**2,axis=1),axis=0)/(self.Ntrack)
+			dispnormed[u,:,:]=dr/np.sqrt(self.disp2av[u])
+				
+		for u in range(self.Nsnap):
+			smax=self.Nsnap-u
+			if self.complicated:
+				print("Dynamics::getVelAuto - Warning: Complicated relabeling: This is slow, make sure to only track a few particles") 
+				for s in range(smax):
+					self.dispauto[u] += np.sum(dispnormed[s,:,0]*dispnormed[u+s,:,0]+dispnormed[s,:,1]*dispnormed[u+s,:,1]+dispnormed[s,:,2]*dispnormed[u+s,:,2])/(self.Ntrack*smax)
+			else:
+				self.dispauto[u]=np.sum(np.sum((dispnormed[:smax,:,0]*dispnormed[u:,:,0]+dispnormed[:smax,:,1]*dispnormed[u:,:,1]+dispnormed[:smax,:,2]*dispnormed[u:,:,2]),axis=1),axis=0)/(self.Ntrack*smax)   
+
+		xval=np.linspace(0,self.Nsnap*self.param.dt*self.param.dump['freq'],num=self.Nsnap)
+		if verbose:
+			fig=plt.figure()
+			plt.plot(xval,self.dispauto,'r.-',lw=2)
+			plt.plot(xval,self.disp2av,'k.-',lw=2)
+			plt.xlabel('time')
+			plt.ylabel('correlation')
+			plt.title('Normalised Displacement autocorrelation function')
+			#plt.show()
+		return xval, self.dispauto, self.disp2av
         
 	# Computes non-gaussian factor / kurtosis (4th moment), and also the MSD (2nd moment) if it hasn't been done yet
 	# returns all three
@@ -342,9 +445,9 @@ class Dynamics(Configuration):
 					hmm=(self.drift[:smax,:]-self.drift[u:,:])
 					takeoff=np.einsum('j,ik->ijk',np.ones((self.Ntrack,)),hmm)
 				if self.geom.periodic:
-					SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(self.geom.ApplyPeriodicX(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0])+takeoff[:,self.usethese,0])+1.0j*qval[1]*(self.geom.ApplyPeriodicY(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1])+takeoff[:,self.usethese,1])+1.0j*qval[2]*(self.geom.ApplyPeriodicZ(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2])+takeoff[:,self.usethese,2])),axis=1),axis=0)/(self.Ntrack*smax)
+					SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(self.geom.ApplyPeriodicX(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0])+takeoff[:,:,0])+1.0j*qval[1]*(self.geom.ApplyPeriodicY(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1])+takeoff[:,:,1])+1.0j*qval[2]*(self.geom.ApplyPeriodicZ(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2])+takeoff[:,:,2])),axis=1),axis=0)/(self.Ntrack*smax)
 				else:
-					SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0]+takeoff[:,self.usethese,0])+1.0j*qval[1]*(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1]+takeoff[:,self.usethese,1])+1.0j*qval[2]*(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2]+takeoff[:,self.usethese,2])),axis=1),axis=0)/(self.Ntrack*smax)
+					SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0]+takeoff[:,:,0])+1.0j*qval[1]*(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1]+takeoff[:,:,1])+1.0j*qval[2]*(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2]+takeoff[:,:,2])),axis=1),axis=0)/(self.Ntrack*smax)
 			else:
 				if self.complicated:
 					for s in range(smax):
@@ -375,83 +478,89 @@ class Dynamics(Configuration):
 			plt.title('Self-intermediate, k = ' + str(qnorm))
 			#plt.show()
 		return tval, SelfInt2
+
+	def getDynStruct(self,qmax,omegamax,kind,usetype='all',L="default",verbose=True):
+		if L=="default":
+			L = self.geom.Lx
+		if not self.geom.manifold == 'plane':
+			print("Configuration::FourierTransVel - Error: attempting to compute 2d radially averaged Fourier transform on a non-flat surface. Stopping.")
+			sys.exit()
 		
-	
-#################### Not checked, probably buggy / physics wrong frome since forever ###############  
-	# Well, that seems to do fuck all
-	def getDynStruct(self,qmax,omegamax,verbose=True,nmax=50):
-		# Following the template of Wysocki, Winkler, Gompper
-		dq=1.0/self.geom.Lx
+		# Note to self: only low q values will be interesting in any case. 
+		# The stepping is in multiples of the inverse box size. Assuming a square box.
+		print("Fourier transforming velocities")
+		dq=2*np.pi/L
 		nq=int(qmax/dq)
-		if nq>nmax:
-			print("Coarsening q interval to reduce computational load")
-			nq=nmax
-			dq=qmax/nq
-		nq2=int(2**0.5*nq)
-		print("Stepping space Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
-		dom=1.0/(self.Nsnap*self.param.dt*self.param.dump['freq'])
-		nom1=int(omegamax/dom)
-		nom=2*int(omegamax/dom)+1
-		print("Stepping time Fourier transform with step " + str(dom)+ ", resulting in " + str(nom)+ " steps.")
-		# Formally: S(q,omega) = 1/N int dt \rho_q(t) \rho*_q(0) e^i\omega t, where \rho_q(t) = \int dr \rho(r,t) e^iq r
-		# The second part is what we already had for the positional static structure factor
-		# For simplicity reasons, do the radial averaging before taking the time transform
+		print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
-		rhorad=np.zeros((self.Nsnap,nq2),dtype=complex)
+		dom=2*np.pi/(self.Nsnap*self.param.dt*self.param.dump['freq'])
+		nom=int(omegamax/dom)
+		print("Stepping time Fourier transform with step" + str(dom) + ",resulting in " + str(nom) + " steps.")
+		omega=np.linspace(0,omegamax,nom)
+		print(omega)
+
+		#print " After Qrad" 
+		fourierval=np.zeros((nq,nq,nom,2),dtype=complex)
+		
+		if not self.tracked:
+			self.getTrack(usetype)
+		if self.complicated:
+			print("Attempting nasty spatiotemporal correlations which tracking complicated particles. This is too ineffective. stopping.")
+			sys.exit()
+		if kind=='displacement':
+			if self.geom.periodic:
+				field=self.geom.ApplyPeriodic2d(self.rval[:,self.usethese,:]-self.raverage[self.usethese,:])/np.sqrt(np.average(self.disp2av))
+			else:
+				field=self.rval[:,self.usethese,:]-self.raverage[self.usethese,:]/np.sqrt(np.average(self.disp2av))
+			print('Maximum displacement: ' +np.str(np.amax(np.abs(field))))
+			print('Minimum displacement: ' +np.str(np.amin(np.abs(field))))
+		elif kind=='velocity':
+			field=self.vval[:,self.usethese,:]/np.sqrt(np.average(self.v2av))
+		elif kind=='director':
+			field=self.nval[:,self.usethese,:]
+		else:
+			print("Unknown field in structure factor calculation. Stopping.")
+			sys.exit()
+
+		# need a time matrix with the right dimensions
+		tmat=np.zeros((self.Nsnap,len(self.usethese)))
 		for u in range(self.Nsnap):
-			if (u%10==0):
-				print (u)
-			fourierval=np.empty((nq,nq),dtype=complex)
+			tmat[u,:]=u*self.param.dt*self.param.dump['freq']
+		N = len(self.usethese)
+		for om in range(nom):
+			print (om,omega[om])
 			for kx in range(nq):
 				for ky in range(nq):
-					# And, alas, no FFT since we are most definitely off grid. And averaging is going to kill everything.
-					fourierval[kx,ky]=np.sum(np.exp(1j*(qx[kx]*self.rval[u,:,0]+qy[ky]*self.rval[u,:,1])))
+					fourierval[kx,ky,om,0]=np.sum(np.sum(np.exp(1j*(qx[kx]*self.rval[:,self.usethese,0]+qy[ky]*self.rval[:,self.usethese,1]+omega[om]*tmat))*field[:,:,0],axis=1))/(N*self.Nsnap)
+					fourierval[kx,ky,om,1]=np.sum(np.sum(np.exp(1j*(qx[kx]*self.rval[:,self.usethese,0]+qy[ky]*self.rval[:,self.usethese,1]+omega[om]*tmat))*field[:,:,1],axis=1))/(N*self.Nsnap) 
+			
+		# Sq = \vec{v_q}.\vec{v_-q}, assuming real and symmetric
+		# = \vec{v_q}.\vec{v_q*} = v
+		Sq=np.real(fourierval[:,:,:,0])**2+np.imag(fourierval[:,:,:,0])**2+np.real(fourierval[:,:,:,1])**2+np.imag(fourierval[:,:,:,1])**2
+		Sq=N*Sq
+		# Produce a radial averaging to see if anything interesting happens
+		nq2=int(2**0.5*nq)
+		Sqrad=np.zeros((nq2,nom))
+		for om in range(nom):
 			for l in range(nq2):
-				rhorad[u,l]=np.mean(fourierval[ptsx[l],ptsy[l]])
-		# Do our little shifted averaging procedure at constant q now
-		rhocorr=np.zeros((self.Nsnap,nq2),dtype=complex)
-		for u in range(self.Nsnap):
-			smax=self.Nsnap-u
-			rhocorr[u,:]=np.sum(rhorad[u:,:]*rhorad[:smax,:],axis=0)/smax
-		# Cute. Now do the time tranform:
-		DynStruct=np.zeros((nom,nq2),dtype=complex)
-		tval=np.linspace(0,self.Nsnap*self.param.dt*self.param.dump['freq'],num=self.Nsnap)
-		omega=np.empty((nom,))
-		for no in range(0,nom):
-			omega[no]=(-nom1+no)*dom
-			DynStruct[no,:]=np.einsum('ij,i', rhocorr, np.exp(1j*omega[no]*tval))
-		print (omega)
-		# OK, what have we got? Take the absolute value and look
-		PlotDynStruct=np.real(DynStruct)**2+np.imag(DynStruct)**2
-		if verbose:
-			plt.figure()
-			plt.pcolor(qrad,omega,np.log10(PlotDynStruct))
-			plt.colorbar()
-			plt.title('Dynamical structure factor')
-			
-			plt.figure()
-			plt.pcolor(qrad,tval,np.log10(np.real(rhocorr)))
-			plt.colorbar()
-			plt.title('Density correlation function')
-		if verbose:
-			plt.figure()
-			plt.plot(omega,np.log10(PlotDynStruct[:,0]),'.-k')
-			plt.plot(omega,np.log10(PlotDynStruct[:,1]),'.-r')
-			plt.plot(omega,np.log10(PlotDynStruct[:,5]),'.-g')
-			plt.plot(omega,np.log10(PlotDynStruct[:,10]),'.-b')
-			plt.xlabel('omega')
-			plt.ylabel('structure factor')
-			plt.title('Dynamical structure factor')
-
-			
-			plt.figure()
-			plt.plot(tval,np.log10(rhocorr[:,0]),'.-k')
-			plt.plot(tval,np.log10(rhocorr[:,1]),'.-g')
-			plt.plot(tval,np.log10(rhocorr[:,5]),'.-r')
-			plt.plot(tval,np.log10(rhocorr[:,10]),'.-b')
-			plt.title('Density correlation function')
-		return omega,qrad,DynStruct
+				Sqrad[l,om]=np.average(Sq[ptsx[l],ptsy[l],om])
 		
+		if verbose:
+			plt.figure()
+			# because pcolor is stupid
+			qplot=np.zeros((len(qrad)+1))
+			omegaplot=np.zeros((len(omega)+1))
+			qplot[:len(qrad)]=qrad-dq
+			qplot[len(qrad)] = qrad[-1]+dq
+			omegaplot[:len(omega)]=omega-dom
+			omegaplot[len(omega)] = omega[-1]+dom
+			plt.pcolor(omegaplot,qplot,np.log(Sqrad),vmin=-10,vmax=10)
+			plt.colorbar()
+			plt.xlabel('omega')
+			plt.ylabel('q')
+			plt.title('Fourier space ' + kind + ' correlation')
+		return qrad, omega,Sqrad
+				
 		
 	# Four point structure factor
 	def FourPoint(self,a,qmax=3.14,verbose=True,nmax=20):

@@ -379,8 +379,6 @@ class Configuration:
 			if self.multiopt=="single":
 				ptype = self.ptype
 			else:
-				print(frame)
-				print(self.Nval[frame])
 				ptype = self.ptype[frame,:self.Nval[frame]]
 			useparts=[]
 			for v in range(len(ptype)):
@@ -583,6 +581,21 @@ class Configuration:
 			velvicsek = np.average(self.vval[frame,:self.Nval[frame],:],axis=0)/np.sqrt(vel2av)
 		return dirvicsek, velvicsek
 
+	# Chiral measure for oscillating systems
+	# look for value of n x v/v. Along z. Adapt with unit normal dot product if ever we do a sphere (later)
+	# only on non-pinned particles (or non-boundary, or whatever)
+	# extract both average (global chirality) as well as sqrt of mean square (local chirality)
+	def getChiral(self,usetype,frame=1):
+		useparts=self.getUseparts(usetype,frame)
+		if self.multiopt=='single':
+			vmag=np.sqrt(self.vval[useparts,0]**2+self.vval[useparts,1]**2+self.vval[useparts,2]**2)
+			singamma = np.average((self.nval[useparts,0]*self.vval[useparts,1]-self.nval[useparts,1]*self.vval[useparts,0])/vmag)
+			abssingamma = np.sqrt(np.average((self.nval[useparts,0]*self.vval[useparts,1]-self.nval[useparts,1]*self.vval[useparts,0])**2/vmag**2))
+		else:
+			vmag=np.sqrt(self.vval[frame,useparts,0]**2+self.vval[frame,useparts,1]**2+self.vval[frame,useparts,2]**2)
+			singamma = np.average((self.nval[frame,useparts,0]*self.vval[frame,useparts,1]-self.nval[frame,useparts,1]*self.vval[frame,useparts,0])/vmag)
+			abssingamma = np.sqrt(np.average((self.nval[frame,useparts,0]*self.vval[frame,useparts,1]-self.nval[frame,useparts,1]*self.vval[frame,useparts,0])**2/vmag**2))
+		return singamma,abssingamma
 	
 	# Basic statistics (mean velocity, density, pressure, stress)
 	def getStatsBasic(self,frame=1):

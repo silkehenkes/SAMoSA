@@ -182,7 +182,8 @@ from read_conf import *
 	# run 10000000 (note that's the second occurence; the one refering *NOT* to the relaxation step
 
 class Param:
-	def __init__(self,filename):
+	# because sometimes in this thicket, it's impossible to ever get a time step out
+	def __init__(self,filename,default_dt=0.01):
 				
 		self.filename=filename
 		print(filename)
@@ -433,6 +434,9 @@ class Param:
 							print (self.groupnames)
 							print ("Parameters are stored in the dictionary self.group_int_params:")
 							print (self.group_int_params)
+					# if in all of this gunk we still haven't assigned a time step
+					# hit now regularly since Rastko split the space and angle parts ...
+					self.dt = default_dt
 		
 		# Population control
 		# MISSING: The fade-in options 
@@ -461,6 +465,7 @@ class Param:
 		except KeyError:
 			self.npopulation=0
 			pass
+		
 		
 		self.nsteps = int(conf.key_words['run'][nNVE].name)
 		print ('Simulation time steps')
