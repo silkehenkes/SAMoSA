@@ -47,7 +47,18 @@ class Dynamics(Configuration):
 		# If that's out of the way, nothing is being relabeled. These are our labels once and for all
 		useparts = self.getUseparts(usetype,0)
 		# This is the crucial one for the Hessian
-		rval0 = np.mean(self.rval[:,useparts,:],axis=0)
+		# do note PBC issues ... so more complicated
+		if self.geom.periodic:
+			rval0 = np.zeros((len(useparts),3))
+			ct=0
+			for id in useparts:
+				dr = self.geom.ApplyPeriodic12(self.rval[:,id,:],self.rval[0,id,:])
+				rval0[ct] = np.average(dr,axis=0) + self.rval[0,id,:]
+				ct+=1
+			# put back into box if necessary
+			self.geom.ApplyPeriodic2d(rval0)
+		else:
+			rval0 = np.mean(self.rval[:,useparts,:],axis=0)
 		# Less meaningful, but indulge me
 		vval0 = np.mean(self.vval[:,useparts,:],axis=0)
 		nval0 = np.mean(self.nval[:,useparts,:],axis=0)
@@ -56,9 +67,9 @@ class Dynamics(Configuration):
 		ptype0 = self.ptype[0,useparts]
 		flag0 = self.flag[0,useparts]
 		
-		#self.fromPython(kwargs["param"],kwargs["rval"],kwargs["vval"],kwargs["nval"],kwargs["radii"],kwargs["ptype"],kwargs["flag"])
-		#def fromPython(self,param,rval,vval,nval,radius,ptype,flag):
-		averageChild = Configuration(initype="fromPython",param=self.param,rval=rval0,vval=vval0,nval=nval0,radii=radius0,ptype=ptype0,flag=flag0)
+		#self.fromPython(kwargs["param"],kwargs["rval"],kwargs["vval"],kwargs["nval"],kwargs["radii"],kwargs["ptype"],kwargs["flag"],kwargs["makeCellList"],kwargs["redobox"])
+		#def fromPython(self,param,rval,vval,nval,radius,ptype,flag,makeCellList=True,redobox=False):
+		averageChild = Configuration(initype="fromPython",param=self.param,rval=rval0,vval=vval0,nval=nval0,radii=radius0,ptype=ptype0,flag=flag0,makeCellList=True,redobox=False)
 		return averageChild
 		
 	# Tracking a subset of particles: This identifies the relevant ones
@@ -722,9 +733,6 @@ class Dynamics(Configuration):
 			#proj2=np.zeros((3*Hessian.N,self.Nsnap))
 			#print Hessian.eigvec[0:2*Hessian.N:2,0]
 			#print Hessian.eigvec[0:3*Hessian.N:3,1]
-			# Check out what's going on here
-			transcomp=np.zeros((self.Nsnap,3))
-			velcomp=np.zeros((self.Nsnap,3))
 			for u in range(self.Nsnap):
 				#dr=self.geom.ApplyPeriodic2d(rnew-hessnew)
 				if self.geom.periodic:
@@ -745,7 +753,7 @@ class Dynamics(Configuration):
 			self.proj2av=np.sum(self.proj**2,axis=1)
 			self.projv2av=np.sum(self.projv**2,axis=1)
 			
-		return self.proj,self.projv,self.proj2av,self.projv2av,transcomp,velcomp
+		return self.proj,self.projv,self.proj2av,self.projv2av
 			
 	def plotProjections(self,Hessian,nmodes=5):
 	  
@@ -755,7 +763,7 @@ class Dynamics(Configuration):
 		plt.figure()
 		for u in range(nmodes):
 			c=next(color)
-			plt.plot(tval,self.proj[u,:],'.-',color=c,label='mode '+str(u))
+			plt.plot(tval,self.proj[u,:],'-',color=c,label='mode '+str(u))
 		if nmodes<10:
 			plt.legend()
 		plt.xlabel('time')
@@ -766,7 +774,7 @@ class Dynamics(Configuration):
 		plt.figure()
 		for u in range(nmodes):
 			c=next(color)
-			plt.plot(tval,self.projv[u,:],'.-',color=c,label='mode '+str(u))
+			plt.plot(tval,self.projv[u,:],'-',color=c,label='mode '+str(u))
 		if nmodes<10:
 			plt.legend()
 		plt.xlabel('time')
@@ -776,15 +784,18 @@ class Dynamics(Configuration):
 		
 		omega = np.sqrt(np.abs(Hessian.eigval))
 		plt.figure()
-		plt.plot(omega,0.5*Hessian.eigval*self.proj2av,'.-r',label='projection')
+		nrm=np.average(0.5*Hessian.eigval*self.proj2av)
+		energy=0.5*Hessian.eigval*self.proj2av/nrm
+		plt.semilogy(omega,energy,'.r',label='projection')
 		plt.xlabel(r'$\omega$')
 		plt.ylabel('Energy')
-		plt.xlim(0,12)
+		#plt.xlim(0,12)
 		#plt.ylim(1e-10,1e-5)
 		plt.title('Energy from displacement projections')
+
 		
 		plt.figure()
-		plt.plot(omega,self.proj2av/np.sum(self.proj2av),'.-r',label='displacements')
+		plt.semilogy(omega,self.proj2av/np.sum(self.proj2av),'.r',label='displacements')
 		plt.xlabel(r'$\omega$')
 		plt.ylabel('projection square')
 		#plt.xlim(-0.01,12)
@@ -792,12 +803,14 @@ class Dynamics(Configuration):
 		plt.title('Square projections (normalised)')
 		
 		plt.figure()
-		plt.plot(omega,self.projv2av/np.sum(self.projv2av),'.-g',label='velocities')
+		plt.semilogy(omega,self.projv2av/np.sum(self.projv2av),'.g',label='velocities')
 		plt.xlabel(r'$\omega$')
 		plt.ylabel('projection square')
 		#plt.xlim(-0.01,12)
 		plt.legend()
 		plt.title('Square projections (normalised)')
+
+		return energy
 		
 		
 		

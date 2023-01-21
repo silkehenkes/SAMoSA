@@ -20,6 +20,20 @@ class Hessian:
 		#self.inter=self.conf.inter
 		self.debug=debug
 		print("Checking for wrap: " + str(np.amin(self.conf.rval[:,0])))
+		
+		tps=list(np.unique(self.conf.ptype))
+		print(tps)
+		if self.debug:
+			plt.figure()
+			cols=['k','r','b','g','m'] # allowed to crash if we ever have more thatn 5 types ...
+		self.numtypes=np.zeros((len(tps),))
+		for tp in tps:
+			idx = np.where(self.conf.ptype==tp)[0]
+			print(len(idx))
+			self.numtypes[tp-1] = len(idx)
+			if self.debug:
+				plt.plot(self.conf.rval[idx,0],self.conf.rval[idx,1],marker='o',linestyle='none',color=cols[tp-1])
+		print(self.numtypes)
 	
 	def setRattlers(rattlers):
 		self.rattlers = rattlers
@@ -27,7 +41,7 @@ class Hessian:
         
 	
 	# This needs to be one of the single-frame configurations, create check for it
-	def makeMatrix(self,dim=2,fixBorder=True,btype = 2,typeweights = 'none',addRestoring=True,ksurf=10.0,addCurvature=False):
+	def makeMatrix(self,dim=2,fixBorder=True,btype = 2,typeweights = 'none',pairstiff='none',addRestoring=True,ksurf=10.0,addCurvature=False):
 		# Dimensions of the problem
 		self.dim = dim
 		# Check what dimension we are after
@@ -87,7 +101,10 @@ class Hessian:
 				fval=np.sum(fvec*nij,axis=1)
 				fav+=sum(fval)
 				# Stiffnesses
-				kij=self.conf.inter.getStiffness(i,neighbours,drvec,radi,radj)
+				if pairstiff=='auto':
+					kij=self.conf.inter.getStiffness(i,neighbours,drvec,radi,radj)
+				else:
+					kij=np.zeros((len(neighbours)))
 				# equilibrium distances are given by dr already
 				
 				# Now we are filling the matrix in either 3d or 2d
@@ -108,6 +125,11 @@ class Hessian:
 						else:
 							weii = 1.0
 							weij = 1.0
+						if not pairstiff == 'auto':
+							tpi = int(self.conf.ptype[i])-1
+							tpj = int(self.conf.ptype[neighbours[j]])-1
+							kij[j] = pairstiff[tpi][tpj]
+							fval[j] = fval[j]*kij[j]
 						n=nij[j,:]
 						N=Normal[neighbours[j],:]
 						subsquare=np.zeros((3,3))
@@ -189,6 +211,11 @@ class Hessian:
 						else:
 							weii = 1.0
 							weij = 1.0
+						if not pairstiff == 'auto':
+							tpi = int(self.conf.ptype[i])-1
+							tpj = int(self.conf.ptype[neighbours[j]])-1
+							kij[j] = pairstiff[tpi][tpj]
+							fval[j] = fval[j]*kij[j]
 						n=nij[j,:]
 						subsquare=np.zeros((2,2))
 						# xx, xy and xz
@@ -228,9 +255,9 @@ class Hessian:
 		# Eigenvalues and eigenvectors
 		# Only symmetrise to calculate - for clarity and debugging above
 		HessianSym=0.5*(self.Hessian+np.transpose(self.Hessian))
-		if self.debug:
-			plt.figure()
-			plt.pcolor(HessianSym)
+		#if self.debug:
+		#	plt.figure()
+		#	plt.pcolor(HessianSym)
 		#HessianASym=0.5*(self.Hessian-np.transpose(self.Hessian))
 		#print HessianASym
 		# Use routines for hermitian eigenvector decomposition
@@ -239,6 +266,11 @@ class Hessian:
 		self.eigval, self.eigvec = LA.eigh(HessianSym)
 		print("The smallest eigenvalue is: " + str(np.amin(self.eigval)))
 		#print(self.eigval)
+		# Some obvious statistics here
+		# participation ratio
+		Qpart=np.zeros((len(self.eigval),))
+		for u in range(len(self.eigval)):
+			Qpart[u] = np.sum(np.abs(self.eigvec[:,u]))**2/(self.dim*self.N)
 		# Crosscheck on sanity
 		if self.dim == 3:
 			wx=np.zeros((self.N,))
@@ -257,14 +289,14 @@ class Hessian:
 				#print (wx)
 				#print (wy)
 				#print (wz)
-			return wx,wy,wz
+			return Qpart,wx,wy,wz
 		else:
 			wx=np.zeros((self.N,))
 			wy=np.zeros((self.N,))
 			for u in range(self.N):
-					# dimensional contributions
-					wx[u]=np.sum(self.eigvec[0:2*self.N:2,u]**2)
-					wy[u]=np.sum(self.eigvec[1:2*self.N:2,u]**2)
+				# dimensional contributions
+				wx[u]=np.sum(self.eigvec[0:2*self.N:2,u]**2)
+				wy[u]=np.sum(self.eigvec[1:2*self.N:2,u]**2)
 			if self.debug:
 				# start with some debugging output
 				plt.figure()
@@ -272,12 +304,12 @@ class Hessian:
 				plt.plot(eigrank,self.eigval,'.-')
 				#print (wx)
 				#print (wy)
-			return wx,wy
+			return Qpart,wx,wy
 		
 	# Unlike its 3d equivalent, this is more of a debugging situation
 	def plotModes2d(self,modelabels,omegamax=3.0,npts=100):
 		plt.figure()
-		n = np.ceil(len(modelabels)**0.5)
+		n = int(np.ceil(len(modelabels)**0.5))
 		ct = 1
 		for u in modelabels:
 			xix = self.eigvec[0:2*self.N:2,u]
