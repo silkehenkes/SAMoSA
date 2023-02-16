@@ -246,15 +246,10 @@ class Dynamics(Configuration):
 			else:
 				self.v2av[u]=np.sum(np.sum((self.vval[u,self.usethese,:])**2,axis=1),axis=0)/(self.Ntrack)
 				vnormed[u,:,:]=self.vval[u,self.usethese,:]/np.sqrt(self.v2av[u])
-				
+		print(vnormed)
 		for u in range(self.Nsnap):
 			smax=self.Nsnap-u
-			if self.complicated:
-				print("Dynamics::getVelAuto - Warning: Complicated relabeling: This is slow, make sure to only track a few particles") 
-				for s in range(smax):
-					self.velauto[u] += np.sum(vnormed[s,:,0]*vnormed[u+s,:,0]+vnormed[s,:,1]*vnormed[u+s,:,1]+vnormed[s,:,2]*vnormed[u+s,:,2])/(self.Ntrack*smax)
-			else:
-				self.velauto[u]=np.sum(np.sum((vnormed[:smax,:,0]*vnormed[u:,:,0]+vnormed[:smax,:,1]*vnormed[u:,:,1]+vnormed[:smax,:,2]*vnormed[u:,:,2]),axis=1),axis=0)/(self.Ntrack*smax)
+			self.velauto[u]=np.sum(np.sum((vnormed[:smax,:,0]*vnormed[u:,:,0]+vnormed[:smax,:,1]*vnormed[u:,:,1]+vnormed[:smax,:,2]*vnormed[u:,:,2]),axis=1),axis=0)/(self.Ntrack*smax)
 
                                 
 		xval=np.linspace(0,self.Nsnap*self.param.dt*self.param.dump['freq'],num=self.Nsnap)
@@ -465,14 +460,15 @@ class Dynamics(Configuration):
 						ps = list(self.usethese[s,:])
 						pu = list(self.usethese[u+s,:])
 						if self.geom.periodic:
-							SelfInt[u] += np.sum(np.exp(1.0j*qval[0]*(self.geom.ApplyPeriodicX(-self.rval[s,ps,0]+self.rval[u+s,pu,0]))+1.0j*qval[1]*(self.geom.ApplyPeriodicY(-self.rval[s,ps,1]+self.rval[u+s,pu,1]))+1.0j*qval[2]*(self.geom.ApplyPeriodicZ(-self.rval[s,ps,2]+self.rval[u+s,pu,2]))))/(self.N*smax)
+							SelfInt[u] += np.sum(np.exp(1.0j*qval[0]*(self.geom.ApplyPeriodicX(-self.rval[s,ps,0]+self.rval[u+s,pu,0]))+1.0j*qval[1]*(self.geom.ApplyPeriodicY(-self.rval[s,ps,1]+self.rval[u+s,pu,1]))+1.0j*qval[2]*(self.geom.ApplyPeriodicZ(-self.rval[s,ps,2]+self.rval[u+s,pu,2]))))
 						else:
-							SelfInt[u] += np.sum(np.sum(np.exp(1.0j*qval[0]*(-self.rval[s,ps,0]+self.rval[u+2,pu,0])+1.0j*qval[1]*(-self.rval[s,ps,1]+self.rval[u+s,pu,1])+1.0j*qval[2]*(-self.rval[s,ps,2]+self.rval[u+s,pu,2]))))/(self.Ntrack*smax)
+							SelfInt[u] += np.sum(np.exp(1.0j*qval[0]*(-self.rval[s,ps,0]+self.rval[u+2,pu,0])+1.0j*qval[1]*(-self.rval[s,ps,1]+self.rval[u+s,pu,1])+1.0j*qval[2]*(-self.rval[s,ps,2]+self.rval[u+s,pu,2])))
+					SelfInt[u]=SelfInt[u]/(self.Ntrack*smax)
 				else:
 					if self.geom.periodic:
-						SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(self.geom.ApplyPeriodicX(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0]))+1.0j*qval[1]*(self.geom.ApplyPeriodicY(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1]))+1.0j*qval[2]*(self.geom.ApplyPeriodicZ(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2]))),axis=1),axis=0)/(self.N*smax)
+						SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(self.geom.ApplyPeriodicX(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0]))+1.0j*qval[1]*(self.geom.ApplyPeriodicY(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1]))+1.0j*qval[2]*(self.geom.ApplyPeriodicZ(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2]))),axis=1),axis=0)/(self.Ntrack*smax)
 					else:
-						SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0])+1.0j*qval[1]*(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1])+1.0j*qval[2]*(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2])),axis=1),axis=0)/(Ntrack*smax)
+						SelfInt[u]=np.sum(np.sum(np.exp(1.0j*qval[0]*(-self.rval[:smax,self.usethese,0]+self.rval[u:,self.usethese,0])+1.0j*qval[1]*(-self.rval[:smax,self.usethese,1]+self.rval[u:,self.usethese,1])+1.0j*qval[2]*(-self.rval[:smax,self.usethese,2]+self.rval[u:,self.usethese,2])),axis=1),axis=0)/(self.Ntrack*smax)
                         
 		
 		#print tval

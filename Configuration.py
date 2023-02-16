@@ -721,7 +721,7 @@ class Configuration:
 		# Note to self: only low q values will be interesting in any case. 
 		# The stepping is in multiples of the inverse box size. Assuming a square box.
 		print("Fourier transforming velocities")
-		dq=2*np.pi/L
+		dq=np.pi/L
 		nq=int(qmax/dq)
 		print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
 		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
@@ -738,6 +738,7 @@ class Configuration:
 		else:
 			useparts = self.getUseparts(usetype,whichframe)
 			N = len(useparts)
+			print(N)
 			for kx in range(nq):
 				for ky in range(nq):
 					fourierval[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.rval[whichframe,useparts,0]+qy[ky]*self.rval[whichframe,useparts,1]))*self.vval[whichframe,useparts,0])/N
@@ -746,7 +747,7 @@ class Configuration:
 		# Sq = \vec{v_q}.\vec{v_-q}, assuming real and symmetric
 		# = \vec{v_q}.\vec{v_q*} = v
 		Sq=np.real(fourierval[:,:,0])**2+np.imag(fourierval[:,:,0])**2+np.real(fourierval[:,:,1])**2+np.imag(fourierval[:,:,1])**2
-		Sq=N*Sq
+		#Sq=N*Sq
 		# Produce a radial averaging to see if anything interesting happens
 		nq2=int(2**0.5*nq)
 		Sqrad=np.zeros((nq2,))
