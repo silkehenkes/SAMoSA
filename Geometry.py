@@ -231,6 +231,22 @@ class GeometrySphere(Geometry):
 		ephi[:,2]=0
 		return theta,phi,etheta,ephi
 	
+	#And because it's easier to do it this way
+	def TangentBundleSingle(self,rval):
+		rhat=rval/np.sqrt(np.sum(rval**2))
+		theta=np.arccos(rhat[2])
+		phi=np.sign(rhat[1]/(np.sin(theta)))*np.arccos(rhat[0]/(np.sin(theta)))
+		# The other two of our trio of local coordinate vectors
+		etheta = np.empty(np.shape(rval))
+		etheta[0]=np.cos(theta)*np.cos(phi)
+		etheta[1]=np.cos(theta)*np.sin(phi)
+		etheta[2]=-np.sin(theta)
+		ephi=np.empty(np.shape(rval))
+		ephi[0]=-np.sin(phi)
+		ephi[1]=np.cos(phi)
+		ephi[2]=0
+		return theta,phi,etheta,ephi
+
 	# Complementary: The unit normal
 	def UnitNormal(self,rval):
 		rs = np.sqrt(rval[:,0]**2 + rval[:,1]**2 + rval[:,2]**2)

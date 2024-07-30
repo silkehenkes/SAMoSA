@@ -209,14 +209,16 @@ class Param:
 		self.inputfile = conf.key_words['input'][0].name
 		print("Input file: " + self.inputfile)
 		# Dump parameters
-		self.dumpname=conf.key_words['dump'][0].name
+		# Always of the *last* dump
+		usedmp=len(conf.key_words['dump'])-1
+		self.dumpname=conf.key_words['dump'][usedmp].name
 		self.dump={}
-		for l in range(len(conf.key_words['dump'][0].attributes)):
+		for l in range(len(conf.key_words['dump'][usedmp].attributes)):
 			try:
-				self.dump[str.strip(conf.key_words['dump'][0].attributes[l].name)]=float(conf.key_words['dump'][0].attributes[l].val)
+				self.dump[str.strip(conf.key_words['dump'][usedmp].attributes[l].name)]=float(conf.key_words['dump'][usedmp].attributes[l].val)
 			except:
 				try:
-					self.dump[str.strip(conf.key_words['dump'][0].attributes[l].name)]=str.strip(conf.key_words['dump'][0].attributes[l].val)
+					self.dump[str.strip(conf.key_words['dump'][usedmp].attributes[l].name)]=str.strip(conf.key_words['dump'][usedmp].attributes[l].val)
 				except: # no constraints
 					pass
 		
@@ -316,17 +318,19 @@ class Param:
 			self.gamma=float(conf.key_words['pair_potential'][0].attributes[1].val)
 			self.lambdaval=float(conf.key_words['pair_potential'][0].attributes[2].val)
 			
-		# NVE integrator
-		# Everything is based on the assumption that there is only one of these, currently ...
+		# We will work on the assumption that what we want is the last integrator, typically
 		nNVE=0
+		nintotal=0
 		if conf.key_words['integrator'][0].name=='nve':
 			print("NVE integrator ") 
 			self.nstepsNVE= int(conf.key_words['run'][0].name)
 			nNVE+=1
 		else:
 			self.nstepsNVE=0
+			nintotal = len(conf.key_words['integrator'])
 		print("NVE steps: " + str(self.nstepsNVE))
 		print("NVE integrators: " + str(nNVE))
+		print("total integrators: " + str(nintotal))
 				
 		# Type-wise pair potentials and aligners (careful: types and groups don't have to match!)
 		# square lists of lists of dictionaries or names
@@ -384,14 +388,14 @@ class Param:
 		# First: distinguish between groups and no groups
 		self.one_integrator=False
 		if self.ngroups==1:
-			self.integrator=conf.key_words['integrator'][nNVE].name
+			self.integrator=conf.key_words['integrator'][nintotal-1].name
 			print("Main integrator: " + self.integrator)
 			self.int_params={}
-			for l in range(len(conf.key_words['integrator'][nNVE].attributes)):
+			for l in range(len(conf.key_words['integrator'][nintotal-1].attributes)):
 				try:
-					self.int_params[str.strip(conf.key_words['integrator'][nNVE].attributes[l].name)]=str.strip(conf.key_words['integrator'][nNVE].attributes[l].val)
+					self.int_params[str.strip(conf.key_words['integrator'][nintotal-1].attributes[l].name)]=str.strip(conf.key_words['integrator'][nintotal-1].attributes[l].val)
 				except: # some odd thermal ones are effectively boolean
-					self.int_params[str.strip(conf.key_words['integrator'][nNVE].attributes[l].name)]=True
+					self.int_params[str.strip(conf.key_words['integrator'][nintotal-1].attributes[l].name)]=True
 			done = self.oneInt(conf)
 		else:
 			self.group_integrator=['none' for u in range(self.ngroups)] 
@@ -474,7 +478,25 @@ class Param:
 	
 	def oneInt(self,conf):
 		self.one_integrator=True
-		if self.integrator=='brownian':
+		if self.integrator=='brownian_align':
+			try:
+				self.dt =float(self.int_params['dt'])
+			except:
+				#print conf.key_words['timestep']
+				#self.dt = float(conf.key_words['timestep'])
+				# Oh yes, that syntax is incompatible with the parser
+				# And leads to all kind of BS if I don't stay on top of it
+				self.dt=0.01
+			print("Time step: " + str(self.dt))
+			self.seed = self.int_params['seed']
+			print("Dynamics seed: " + self.seed)
+			self.mu = self.int_params['mur']
+			print("Mobility: " + str(self.mu))
+			# Again, the stupid v0 as external ali
+			self.nu = self.int_params['nu']
+			print("Noise strength: " + str(self.nu))
+
+		elif self.integrator=='brownian':
 			# In case it's one of the newer ones where the dt is on its own
 			# If the except doesn't work either, we are fucked in any case
 			try:

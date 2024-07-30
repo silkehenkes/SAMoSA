@@ -167,9 +167,9 @@ class Topology(Configuration):
 		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=PolarField,radii=radius0,ptype=ptype0,flag=flag0,makeCellList=makeCellList,redobox=True)
 		return flowChild
 		
-	def makeFrameChild(self,frame):
+	def makeFrameChild(self,frame,makeCellList=True):
 		# first generate the appropriate child configuration for only that frame
-		frameChild = Configuration(initype="makeChild",frame=frame,usetype="all",makeCellList=makeCellList,redobox=True)
+		frameChild = Configuration(initype="makeChild",parentconf=self,frame=frame,usetype="all",makeCellList=makeCellList,redobox=True)
 		return frameChild
 	
 	
@@ -455,6 +455,22 @@ class Topology(Configuration):
 			
 		return thetabin, isdata, swirlhist, inhist, swirlerr, inerr
 		
+	# compute velocity projection distributions as distribution of angle around etheta
+	# because of the stupid definition in the paper, choose this awkward angle phi
+	def velAngleDist(self,child):
+		aphibin=np.linspace(0,2*np.pi,101)
+		theta,phi,etheta,ephi = child.getTangentBundle()
+		vsinaphi = -(child.vval[:,0]*etheta[:,0]+child.vval[:,1]*etheta[:,1]+child.vval[:,2]*etheta[:,2])
+		# and ephi for the tangential bits [minus sign because etheta points outward]
+		vcosaphi = -(child.vval[:,0]*ephi[:,0]+child.vval[:,1]*ephi[:,1]+child.vval[:,2]*ephi[:,2])
+		vav = np.sqrt(child.vval[:,0]**2+child.vval[:,1]**2+child.vval[:,2]**2)
+		aphi=np.arctan2(vsinaphi,vcosaphi)+np.pi
+		aphihist,edges=np.histogram(aphi,bins=aphibin,density=True)
+		aphihistW,edges=np.histogram(aphi,bins=aphibin,density=True,weights=vav)
+		return aphibin,aphihist,aphihistW
+
+
+
 	# Compute the flux through the boundaries by concentric rings around the defect
 	# In particular, look through imbalance of fluxes from division / death
 	# Needs to happen on the velocity field (aka already displacement field
@@ -476,15 +492,17 @@ class Topology(Configuration):
 		# bins of individual surviving particles
 		binval = (np.floor(theta/dtheta)).astype(int)
 		
-		# bin of births
-		# Need the tangent bundle as well ...
-		birththeta,bphi,betheta,bephi=child.geom.TangentBundle(births)
-		birthbin = (np.floor(birththeta/dtheta)).astype(int)
-		print(birthbin)
+		if not (len(births)==0):
+			# bin of births
+			# Need the tangent bundle as well ...
+			birththeta,bphi,betheta,bephi=child.geom.TangentBundle(births)
+			birthbin = (np.floor(birththeta/dtheta)).astype(int)
+			print(birthbin)
 		# bin of deaths
-		deaththeta,dphi,detheta,dephi=child.geom.TangentBundle(deaths)
-		deathbin = (np.floor(deaththeta/dtheta)).astype(int)
-		print(deathbin)
+		if not (len(deaths)==0):
+			deaththeta,dphi,detheta,dephi=child.geom.TangentBundle(deaths)
+			deathbin = (np.floor(deaththeta/dtheta)).astype(int)
+			print(deathbin)
 		
 		velflux=np.zeros((nbin,))
 		birthcount=np.zeros((nbin,))
@@ -512,10 +530,16 @@ class Topology(Configuration):
 				velav[b] = np.sqrt(vrad**2+vtan**2)
 				alpha[b] = np.arctan2(vtan,vrad)
 				vel2av[b] = np.sqrt(np.average(radflow**2 + tanflow**2))
-			binbin=np.where(birthbin==b)
-			birthcount[b]=len(binbin[0])
-			dinbin=np.where(deathbin==b)
-			deathcount[b]=len(dinbin[0])
+			if not (len(births)==0):
+				binbin=np.where(birthbin==b)
+				birthcount[b]=len(binbin[0])
+			else:
+				birthcount[b]=0.0
+			if not (len(deaths)==0):
+				dinbin=np.where(deathbin==b)
+				deathcount[b]=len(dinbin[0])
+			else:
+				deathcount[b]=0.0
 			
 		if verbose:
 			plt.figure()
