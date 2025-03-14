@@ -45,7 +45,7 @@ class ReadData:
 		if self.dialect == "SAMoS":
 			# this has a # in front of the header, and I cannot seem to tell python to disregard it (and not come up as 'unnamed')
 			# as a result, all the columns labels are shifted one to the left
-			self.data = pandas.read_csv(self.datafile,header=0,sep = '\s+')
+			self.data = pandas.read_csv(self.datafile,header=0,sep="\s+")
 			temp = self.data.columns
 			colshift = {}
 			for u in range(len(temp)-1): 

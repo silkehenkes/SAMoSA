@@ -38,7 +38,152 @@ class Hessian:
 	def setRattlers(rattlers):
 		self.rattlers = rattlers
 		self.Nrigid=self.N-len(rattlers)
-        
+
+	# Specifically for self-alignment simulations in dimensions 2, with a boundary, and none of that mass stuff. Take the moving submatrix only.
+	def makeMatrix2dBound(self,usetype=1,pairstiff=[[1,5],[5,1]]):
+		if (self.geom.manifold=='plane'):
+			print("Hessian: Calculating boundary constrained Hessian on a plane on type " + str(usetype))
+		else:
+			print("Hessian: Error: self alignment 2d Hessian is not implemented on " + self.geom.manifold + " manifolds!" )
+			sys.exit()
+		# Get a list of the particles of the correct type in order
+		self.Huseparts = self.conf.getUseparts(usetype)
+		self.NHessian = len(self.Huseparts)
+		print("Self alignment Hessian: Info - allocating the " + str(2*self.NHessian) + " by " + str(2*self.NHessian) + " 2d Hessian matrix.")
+		self.Hessian=np.zeros((2*self.NHessian,2*self.NHessian))
+		# Constructing the actual matrix
+		fsum=0.0
+		fav=0.0
+		# i will be index in matrix
+		for i in range(len(self.Huseparts)):
+			if (i%200==0):
+				print (i)
+			# idx is actual particle label
+			idx = self.Huseparts[i]
+			print('Particle ' + str(idx) + ' will be in matrix in position .' + str(i))
+			# get some of the constants that are necessary here:
+			# getNeighbours(self,i,mult=1.0,dmax="default",frame=1,eps=1e-8):
+			neighbours, drvec, radi, radj = self.conf.getNeighbours(idx,self.conf.inter.getMult(),self.conf.inter.getDmax())
+			# particle distances and contact normal vectors
+			dr =np.sqrt(drvec[:,0]**2+drvec[:,1]**2+drvec[:,2]**2)
+			nij=np.transpose(np.transpose(drvec)/np.transpose(dr))
+			# Forces (overlap taken care of)
+			fvec=self.conf.inter.getForce(i,neighbours,drvec,radi,radj)
+			#print(fvec)
+			fsum+=sum(fvec)
+			# Projected onto the contact normal
+			fval=np.sum(fvec*nij,axis=1)
+			fav+=sum(fval)
+			# Stiffnesses
+			kij=np.zeros((len(neighbours)))
+			# equilibrium distances are given by dr already
+			diagsquare=np.zeros((2,2))
+			for j0 in range(len(neighbours)):
+				# actual label of particle
+				jdx = neighbours[j0]
+				tpi = int(self.conf.ptype[idx])-1
+				tpj = int(self.conf.ptype[jdx])-1
+				kij = pairstiff[tpi][tpj]
+				fval[j0] = fval[j0]*kij
+
+				n=nij[j0,:]
+				subsquare=np.zeros((2,2))
+				# xx, xy and xz
+				subsquare[0,0]=-fval[j0]/dr[j0]*(1-n[0]*n[0])+kij*n[0]*n[0]
+				subsquare[0,1]=-fval[j0]/dr[j0]*(0-n[0]*n[1])+kij*n[0]*n[1]
+				# yx, yy and yz
+				subsquare[1,0]=-fval[j0]/dr[j0]*(0-n[1]*n[0])+kij*n[1]*n[0]
+				subsquare[1,1]=-fval[j0]/dr[j0]*(1-n[1]*n[1])+kij*n[1]*n[1]
+				# Stick into the big matrix
+				# now see where that lives and if it is part of matrix
+				ismat=False
+				try:
+					j = self.Huseparts.index(jdx)
+					print('Particle ' + str(jdx) + ' will be in matrix in position .' + str(j))
+					ismat = True
+				except:
+					print('Particle ' + str(jdx) + ' is boundary.')
+					#pass
+				if ismat:
+					self.Hessian[2*i:(2*i+2),2*j:(2*j+2)]=-subsquare
+				# Add the required bits to the diagonal part of the matrix
+				# even if it is a boundary particle
+				# xx, xy and xz
+				diagsquare[0,0]+=fval[j0]/dr[j0]*(1-n[0]*n[0])-kij*n[0]*n[0]
+				diagsquare[0,1]+=fval[j0]/dr[j0]*(0-n[0]*n[1])-kij*n[0]*n[1]
+				# yx, yy and yz
+				diagsquare[1,0]+=fval[j0]/dr[j0]*(0-n[1]*n[0])-kij*n[1]*n[0]
+				diagsquare[1,1]+=fval[j0]/dr[j0]*(1-n[1]*n[1])-kij*n[1]*n[1]
+			self.Hessian[2*i:(2*i+2),2*i:(2*i+2)]=-diagsquare
+		fav/=self.NHessian
+		print("Hessian: Estimating distance from mechanical equilibrium of initial configuration ")
+		print("Scaled force sum is " + str(fsum/fav))
+		# checking for nans
+
+	def getModes2dBound(self,debug=False):
+		# Let's have a look if what we get is in any way reasonable
+		# Eigenvalues and eigenvectors
+		# Only symmetrise to calculate - for clarity and debugging above
+		HessianSym=0.5*(self.Hessian+np.transpose(self.Hessian))
+		if self.debug:
+			plt.figure()
+			plt.pcolor(HessianSym)
+		# Use routines for hermitian eigenvector decomposition
+		# Default is ascending order, which suits us
+		print("Starting Diagonalisation!")
+		self.eigval, self.eigvec = LA.eigh(HessianSym)
+		print("The smallest eigenvalue is: " + str(np.amin(self.eigval)))
+		#print(self.eigval)
+		# Some obvious statistics here
+		# participation ratio
+		Qpart=np.zeros((len(self.eigval),))
+		for u in range(len(self.eigval)):
+			Qpart[u] = np.sum(np.abs(self.eigvec[:,u]))**2/(2*self.NHessian)
+		# Crosscheck on sanity
+		wx=np.zeros((self.NHessian,))
+		wy=np.zeros((self.NHessian,))
+		for u in range(self.NHessian):
+			# dimensional contributions
+			wx[u]=np.sum(self.eigvec[0:2*self.NHessian:2,u]**2)
+			wy[u]=np.sum(self.eigvec[1:2*self.NHessian:2,u]**2)
+		if self.debug:
+			# start with some debugging output
+			plt.figure()
+			eigrank=np.linspace(0,2*self.NHessian,2*self.NHessian)
+			plt.plot(eigrank,self.eigval,'.-')
+			#print (wx)
+			#print (wy)
+		return Qpart,wx,wy
+
+	# Unlike its 3d equivalent, this is more of a debugging situation
+	def plotModes2dBound(self,modelabels,omegamax=3.0,npts=100):
+		plt.figure()
+		n = int(np.ceil(len(modelabels)**0.5))
+		ct = 1
+		for u in modelabels:
+			xix = self.eigvec[0:2*self.NHessian:2,u]
+			xiy = self.eigvec[1:2*self.NHessian:2,u]
+			ax = plt.subplot(n,n,ct)
+			ax.quiver(self.conf.rval[self.Huseparts,0],self.conf.rval[self.Huseparts,1],xix,xiy)
+			ax.set_title('Eigenvector rank ' + str(u) + ' with eigenvalue ' + str(self.eigval[u]))
+			ct+=1
+
+		# For this histogram and only this histogram: replace negative eigenvalues by zeros
+		eigplot=self.eigval
+		badlist=list(np.where(eigplot<0.0)[0])
+		eigplot[badlist]=0.0
+		omega=np.real(np.sqrt(eigplot))
+		ombin=np.linspace(0,omegamax,npts)
+		dom=ombin[1]-ombin[0]
+		omhist, bin_edges = np.histogram(omega,bins=ombin)
+		omlabel=(np.round(omega/dom)).astype(int)
+
+		plt.figure()
+		plt.plot(ombin[1:]-dom/2,omhist,'o-k',label='DOS')
+		plt.xlim(0,omegamax)
+		plt.xlabel('omega')
+		plt.ylabel('D(omega)')
+		plt.title('Density of states')
 	
 	# This needs to be one of the single-frame configurations, create check for it
 	def makeMatrix(self,dim=2,fixBorder=True,btype = 2,typeweights = 'none',pairstiff='none',addRestoring=True,ksurf=10.0,addCurvature=False):
@@ -80,6 +225,7 @@ class Hessian:
 				if (i%200==0):
 					print (i)
 				# get some of the constants that are necessary here:
+				# getNeighbours(self,i,mult=1.0,dmax="default",frame=1,eps=1e-8):
 				neighbours, drvec, radi, radj = self.conf.getNeighbours(i,self.conf.inter.getMult(),self.conf.inter.getDmax())
 				# particle distances and contact normal vectors
 				dr =np.sqrt(drvec[:,0]**2+drvec[:,1]**2+drvec[:,2]**2)
@@ -239,9 +385,10 @@ class Hessian:
 						# And add the factor of 3 to shift those eigenvalues above all the other ones.
 					if fixBorder:
 						if self.conf.ptype[i]==btype:
-							keff=3*np.mean(kij)/weii
+							keff=50*pairstiff[tpi][tpi]/weii
 							diagsquare[0,0]+= -keff
 							diagsquare[1,1]+= -keff
+							print ("added boundary particle " + str(i) + " with stiffness " + str(keff))
 					#print diagsquare
 					self.Hessian[2*i:(2*i+2),2*i:(2*i+2)]=-diagsquare*weii
 		fav/=self.N
@@ -250,14 +397,14 @@ class Hessian:
 		# checking for nans
 		
 			
-	def getModes(self):
+	def getModes(self,debug=False):
 		# Let's have a look if what we get is in any way reasonable
 		# Eigenvalues and eigenvectors
 		# Only symmetrise to calculate - for clarity and debugging above
 		HessianSym=0.5*(self.Hessian+np.transpose(self.Hessian))
-		#if self.debug:
-		#	plt.figure()
-		#	plt.pcolor(HessianSym)
+		# if self.debug:
+		# 	plt.figure()
+		# 	plt.pcolor(HessianSym)
 		#HessianASym=0.5*(self.Hessian-np.transpose(self.Hessian))
 		#print HessianASym
 		# Use routines for hermitian eigenvector decomposition

@@ -39,6 +39,13 @@ class Dynamics(Configuration):
 		self.raverage  = np.mean(self.rval[:,:,:],axis=0)
 		self.hasAverage = True
 
+	# This is strictly for oscillations: Read an equilibrated file (e.g. initial file) to linearise around
+	def makeEquilChild(self,filename):
+		equilChild = Configuration(initype="fromCSV",param=self.param,datapath=filename,multiopt="single")
+		equilChild.readDataSingle(filename,"SAMoS",internal=False,readtypes='all')
+		equilChild.makeCellList()
+		return equilChild
+
 	# Compute average positions and create a sub-configuration to feed to the Hessian
 	def makeAverageChild(self,usetype):
 		if self.Nvariable:
@@ -755,7 +762,7 @@ class Dynamics(Configuration):
 	  
 		color=iter(cm.rainbow(np.linspace(0,1,nmodes)))
 		#multmap=LinearSegmentedColormap('test',cdict,N=nmodes) 
-		tval=np.linspace(0,self.Nsnap-1,self.Nsnap)
+		tval=np.linspace(0,self.Nsnap*self.param.dt*self.param.dump['freq'],num=self.Nsnap)
 		plt.figure()
 		for u in range(nmodes):
 			c=next(color)
@@ -807,6 +814,42 @@ class Dynamics(Configuration):
 		plt.title('Square projections (normalised)')
 
 		return energy
+
+	# Project our displacements or any stuff like that onto the eigenmodes of a hessian matrix, which has been calculated separately
+	def projectModes2dBound(self,Hessian):
+		if self.Nvariable:
+			print("Hessians and dividing particles don't mix! Stopping here!")
+			self.proj=0
+			self.projv=0
+		else:
+			# self.rval and self.vval is where the fun is, self.rval=np.zeros((self.Nsnap,self.N,3))
+			self.proj=np.zeros((2*Hessian.NHessian,self.Nsnap))
+			self.projv=np.zeros((2*Hessian.NHessian,self.Nsnap))
+			#proj2=np.zeros((3*Hessian.N,self.Nsnap))
+			#print Hessian.eigvec[0:2*Hessian.N:2,0]
+			#print Hessian.eigvec[0:3*Hessian.N:3,1]
+			for u in range(self.Nsnap):
+				#dr=self.geom.ApplyPeriodic2d(rnew-hessnew)
+				if self.geom.periodic:
+					dr=self.geom.ApplyPeriodic2d(self.rval[u,:,:]-Hessian.conf.rval)
+				else:
+					dr = self.rval[u,:,:]-Hessian.conf.rval
+				dv=self.vval[u,:,:]
+				# now project onto the modes
+				# This is the organisation of our matrix
+				#plt.quiver(self.rval[:,0],self.rval[:,1],self.eigvec[0:3*self.N:3,u],self.eigvec[1:3*self.N:3,u])
+				# By definition, we are just ignoring the third dimension here
+				self.proj[:,u]=1.0*(np.einsum('i,ij->j',dr[Hessian.Huseparts,0],Hessian.eigvec[0:2*Hessian.NHessian:2,:]) + np.einsum('i,ij->j',dr[Hessian.Huseparts,1],Hessian.eigvec[1:2*Hessian.NHessian:2,:]))
+				self.projv[:,u]=1.0*(np.einsum('i,ij->j',dv[Hessian.Huseparts,0],Hessian.eigvec[0:2*Hessian.NHessian:2,:]) + np.einsum('i,ij->j',dv[Hessian.Huseparts,1],Hessian.eigvec[1:2*Hessian.NHessian:2,:]))
+
+			# projection normalization
+			self.proj/=self.Nsnap
+			self.projv/=self.Nsnap
+			self.proj2av=np.sum(self.proj**2,axis=1)
+			self.projv2av=np.sum(self.projv**2,axis=1)
+
+		return self.proj,self.projv,self.proj2av,self.projv2av
+
 		
 		
 		

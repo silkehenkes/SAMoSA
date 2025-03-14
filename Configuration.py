@@ -45,7 +45,7 @@ class Configuration:
 		self.datapath = datapath
 		print(self.datapath)
 		self.multiopt = multiopt
-		self.ignore = ignore
+		self.ignore = True
 		# Options for running mode the analysis
 		if self.multiopt == "single":
 			print("Configuring to read single files")
@@ -260,7 +260,8 @@ class Configuration:
 			self.flag = flag
 		
 			# Create the Interaction class
-			self.inter=Interaction(self.param,monodisperse,self.radius,self.ignore)
+			# def __init__(self,param,sigma,ignore=False,debug=False):
+			self.inter=Interaction(self.param,self.sigma,self.ignore)
 			
 			# Apply periodic geomtry conditions just in case (there seem to be some rounding errors floating around)
 			if self.geom.periodic:
@@ -275,12 +276,14 @@ class Configuration:
 	# read in data based on the content of the folder
 	# readtypes is now a list (when it is not 'all'): Read data of these types, which contains the tracer options
 	# tracers is type = [2], cornea is types = [1, 2] 
-	def readDataMany(self,dialect,skip=0,step=1,howmany='all',Nvariable=False,readtypes = 'all'):
+	def readDataMany(self,dialect,skip=0,step=1,howmany='all',Nvariable=False,readtypes = 'all',filepattern='frame'):
 		self.Nvariable=Nvariable
-		try:
-			filepattern = self.param.dumpname
-		except:
-			filepattern = 'frame'
+		#try:
+		#	filepattern = self.param.dumpname
+		#except:
+		#	pass
+		#	filepattern = 'frame'
+		print(filepattern)
 		files0 = sorted(glob.glob(self.datapath + filepattern + '*.dat'))
 		if len(files0) == 0:
   			files0 = sorted(glob.glob(self.datapath + filepattern + '*.dat.gz'))
@@ -624,6 +627,7 @@ class Configuration:
 ####################### Fourier space and real space equal time correlation functions ##################################
 
 	# Generate 2d points for radially averaged Fourier transform computations
+	# for square systems
 	def makeQrad(self,dq,qmax,nq):
 		nq2=int(2**0.5*nq)
 		qmax2=2**0.5*qmax
@@ -650,47 +654,93 @@ class Configuration:
 			ptsx.append(pts0x)
 			ptsy.append(pts0y)
 		return qx, qy, qrad, ptsx, ptsy
+
+	# Generate 2d points for radially averaged Fourier transform computations
+	# more generally, for potentially rectangular systems
+	def makeQradRect(self,qmax):
+		dqx=np.pi/self.geom.Lx
+		dqy=np.pi/self.geom.Ly
+		nqx=int(qmax/dqx)
+		nqy=int(qmax/dqy)
+		# Pythagoras here: Note that in qspace, the space stays square at a given qmax
+		nq2=int(np.sqrt(nqx**2+nqy**2))
+		qmax2=2**0.5*qmax
+		qx=np.linspace(0,qmax,nqx)
+		qy=np.linspace(0,qmax,nqy)
+		qrad=np.linspace(0,qmax2,nq2)
+		dq=qrad[2]-qrad[1]
+		# do this silly counting once and for all
+		binval=np.empty((nqx,nqy))
+		for kx in range(nqx):
+			for ky in range(nqy):
+				qval=np.sqrt(qx[kx]**2+qy[ky]**2)
+				binval[kx,ky]=round(qval/dq)
+		ptsx=[]
+		ptsy=[]
+		# do the indexing arrays
+		for l in range(nq2):
+			pts0x=[]
+			pts0y=[]
+			for kx in range(nqx):
+				hmm=np.nonzero(binval[kx,:]==l)[0]
+				for v in range(len(hmm)):
+					pts0y.append(hmm[v])
+					pts0x.append(kx)
+			ptsx.append(pts0x)
+			ptsy.append(pts0y)
+		return qx, qy, qrad, ptsx, ptsy
 	
 	# Static structure factor
 	# Which is implicitly in 2D!!
 	def FourierTrans(self,qmax=0.3,whichframe=1,usetype='all',L="default",verbose=False):
 		
-		if L=="default":
-			L = self.geom.Lx
-		if not self.geom.manifold == 'plane':
-			print("Configuration::FourierTrans - Error: attempting to compute 2d radially averaged Fourier transform on a non-flat surface. Stopping.")
-			sys.exit()
+		#if L=="default":
+		#	L = self.geom.Lx
+		#if not self.geom.manifold == 'plane':
+		#	print("Configuration::FourierTrans - Error: attempting to compute 2d radially averaged Fourier transform on a non-flat surface. Stopping.")
+		#	sys.exit()
 		
 		# Note to self: only low q values will be interesting in any case. 
 		# The stepping is in multiples of the inverse box size. Assuming a square box.
+		#print("Fourier transforming positions")
+		#dq=np.pi/L
+		#nq=int(qmax/dq)
+		#print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
+		#qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
+		#nqx=nq
+		#nqy=nq
+		#nq2=int(2**0.5*nq)
+
+		# More general framework for rectangular boxes
 		print("Fourier transforming positions")
-		dq=2*np.pi/L
-		nq=int(qmax/dq)
-		print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
-		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
-		#print " After Qrad" 
-		fourierval=np.zeros((nq,nq),dtype=complex)
-		
+		qx, qy, qrad, ptsx, ptsy=self.makeQradRect(qmax)
+		nqx=len(qx)
+		nqy=len(qy)
+		nq2=len(qrad)
+		print("Stepping Fourier transform with step x" + str(qx[1]-qx[0])+ " and y " + str(qy[1]-qy[0]) + ", resulting in " + str(nq2)+ " steps.")
+
+
+		fourierval=np.zeros((nqx,nqy),dtype=complex)
 		if self.multiopt=="single":
 			useparts = self.getUseparts(usetype)
 			N = len(useparts)
-			for kx in range(nq):
-				for ky in range(nq):
+			for kx in range(nqx):
+				for ky in range(nqy):
 					# And, alas, no FFT since we are most definitely off grid. And averaging is going to kill everything.
 					fourierval[kx,ky]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1])))/N
 			
 		else:
 			useparts = self.getUseparts(usetype,whichframe)
 			N = len(useparts)
-			for kx in range(nq):
-				for ky in range(nq):
+			for kx in range(nqx):
+				for ky in range(nqy):
 					# And, alas, no FFT since we are most definitely off grid. And averaging is going to kill everything.
 					fourierval[kx,ky]=np.sum(np.exp(1j*(qx[kx]*self.rval[whichframe,useparts,0]+qy[ky]*self.rval[whichframe,useparts,1])))/N
 		plotval=N*(np.real(fourierval)**2+np.imag(fourierval)**2)
 		
 		#print plotval
 		# Produce a radial averaging to see if anything interesting happens
-		nq2=int(2**0.5*nq)
+
 		valrad=np.zeros((nq2,))
 		for l in range(nq2):
 			valrad[l]=np.mean(plotval[ptsx[l],ptsy[l]])
@@ -712,35 +762,46 @@ class Configuration:
 	
 	def FourierTransVel(self,qmax=0.3,whichframe=1,usetype='all',L="default",verbose=False):
 		
-		if L=="default":
-			L = self.geom.Lx
-		if not self.geom.manifold == 'plane':
-			print("Configuration::FourierTransVel - Error: attempting to compute 2d radially averaged Fourier transform on a non-flat surface. Stopping.")
-			sys.exit()
+		#if L=="default":
+		#	L = self.geom.Lx
+		#if not self.geom.manifold == 'plane':
+		#	print("Configuration::FourierTransVel - Error: attempting to compute 2d radially averaged Fourier transform on a non-flat surface. Stopping.")
+		#	sys.exit()
 		
 		# Note to self: only low q values will be interesting in any case. 
 		# The stepping is in multiples of the inverse box size. Assuming a square box.
+		#print("Fourier transforming velocities")
+		#dq=np.pi/L
+		#nq=int(qmax/dq)
+		#print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
+		#qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
+		#nqx=nq
+		#nqy=nq
+		#nq2=int(2**0.5*nq)
+
+		# More general framework for rectangular boxes
 		print("Fourier transforming velocities")
-		dq=np.pi/L
-		nq=int(qmax/dq)
-		print("Stepping Fourier transform with step " + str(dq)+ ", resulting in " + str(nq)+ " steps.")
-		qx, qy, qrad, ptsx, ptsy=self.makeQrad(dq,qmax,nq)
-		#print " After Qrad" 
-		fourierval=np.zeros((nq,nq,2),dtype=complex)
+		qx, qy, qrad, ptsx, ptsy=self.makeQradRect(qmax)
+		nqx=len(qx)
+		nqy=len(qy)
+		nq2=len(qrad)
+		print("Stepping Fourier transform with step x" + str(qx[1]-qx[0])+ " and y " + str(qy[1]-qy[0]) + ", resulting in " + str(nq2)+ " steps.")
+
+		fourierval=np.zeros((nqx,nqy,2),dtype=complex)
 		
 		if self.multiopt=="single":
 			useparts = self.getUseparts(usetype)
 			N = len(useparts)
-			for kx in range(nq):
-				for ky in range(nq):
+			for kx in range(nqx):
+				for ky in range(nqy):
 					fourierval[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1]))*self.vval[useparts,0])/N
 					fourierval[kx,ky,1]=np.sum(np.exp(1j*(qx[kx]*self.rval[useparts,0]+qy[ky]*self.rval[useparts,1]))*self.vval[useparts,1])/N 
 		else:
 			useparts = self.getUseparts(usetype,whichframe)
 			N = len(useparts)
 			print(N)
-			for kx in range(nq):
-				for ky in range(nq):
+			for kx in range(nqx):
+				for ky in range(nqy):
 					fourierval[kx,ky,0]=np.sum(np.exp(1j*(qx[kx]*self.rval[whichframe,useparts,0]+qy[ky]*self.rval[whichframe,useparts,1]))*self.vval[whichframe,useparts,0])/N
 					fourierval[kx,ky,1]=np.sum(np.exp(1j*(qx[kx]*self.rval[whichframe,useparts,0]+qy[ky]*self.rval[whichframe,useparts,1]))*self.vval[whichframe,useparts,1])/N 
 			
@@ -749,7 +810,6 @@ class Configuration:
 		Sq=np.real(fourierval[:,:,0])**2+np.imag(fourierval[:,:,0])**2+np.real(fourierval[:,:,1])**2+np.imag(fourierval[:,:,1])**2
 		#Sq=N*Sq
 		# Produce a radial averaging to see if anything interesting happens
-		nq2=int(2**0.5*nq)
 		Sqrad=np.zeros((nq2,))
 		for l in range(nq2):
 			Sqrad[l]=np.mean(Sq[ptsx[l],ptsy[l]])
