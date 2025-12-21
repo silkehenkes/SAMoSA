@@ -348,14 +348,14 @@ class Topology(Configuration):
 		
 		## Same thing for the positions of the birth and death objects
 		BirthDeath=False
-		if not births=='none':
+		if not isinstance(births,str):
 			BirthDeath=True
 			axis0 = np.empty((len(births[:,0]),3))
 			axis0[:,0] = axis[0]
 			axis0[:,1] = axis[1]
 			axis0[:,2] = axis[2]
 			births = child.geom.RotateRodriguez(births,axis0,rot_angle)
-		if not deaths=='none':
+		if not isinstance(deaths,str):
 			BirthDeath=True
 			axis0 = np.empty((len(deaths[:,0]),3))
 			axis0[:,0] = axis[0]
@@ -378,14 +378,14 @@ class Topology(Configuration):
 		
 		## Same thing for the positions of the birth and death objects
 		BirthDeath=False
-		if not births=='none':
+		if not isinstance(births,str):
 			BirthDeath=True
 			axis0 = np.empty((len(births[:,0]),3))
 			axis0[:,0] = axis[0]
 			axis0[:,1] = axis[1]
 			axis0[:,2] = axis[2]
 			births = child.geom.RotateRodriguez(births,axis0,-rot_angle)
-		if not deaths=='none':
+		if not isinstance(deaths,str):
 			BirthDeath=True
 			axis0 = np.empty((len(deaths[:,0]),3))
 			axis0[:,0] = axis[0]

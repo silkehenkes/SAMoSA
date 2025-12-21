@@ -55,6 +55,15 @@ class Configuration:
 			print("Unknown file mode configuration option, stopping!")
 			sys.exit()
 		# Create the right geometry environment:
+		print(param.constraint)
+		# bad hack for ellipsoids
+		# pretend it's a sphere ...
+		# if param.constraint=='ellipsoid':
+		# 	param.constraint='sphere'
+		# 	param.r=500
+		# if param.constraint=='plane_periodic':
+		# 	param.constraint='sphere'
+		# 	param.r=700
 		self.geom=geometries[self.param.constraint](self.param)
 		print(self.geom)
 		
@@ -831,7 +840,7 @@ class Configuration:
 	
 	# Real space velocity correlation function
 	# Note that this can work in higher dimensions. Uses geodesic distance, i.e. on the sphere if necessary
-	def getVelcorrSingle(self,dx,xmax,whichframe=1,usetype='all',verbose=True):
+	def getVelcorrSingle(self,dx,xmax,whichframe=1,usetype='all',removeMean=False,verbose=True):
 		# start with the isotropic one - since there is no obvious polar region
 		# and n is not the relevant variable, and v varies too much
 		print("Velocity correlation function for frame " + str(whichframe))
@@ -845,7 +854,10 @@ class Configuration:
 			N = len(useparts)
 			velav=np.sum(self.vval[useparts,:],axis=0)/N
 			for k in range(N):
-				vdot=np.sum(self.vval[useparts[k],:]*self.vval[useparts,:],axis=1)
+				if removeMean:
+					vdot=np.sum((self.vval[useparts[k],:]-velav)*(self.vval[useparts,:]-velav),axis=1)
+				else:
+					vdot=np.sum(self.vval[useparts[k],:]*self.vval[useparts,:],axis=1)
 				dr=self.geom.GeodesicDistance12(self.rval[useparts[k],:],self.rval[useparts,:])
 				drbin=(np.round(dr/dx)).astype(int)
 				for l in range(npts):
@@ -857,7 +869,10 @@ class Configuration:
 			N = len(useparts)
 			velav=np.sum(self.vval[whichframe,useparts,:],axis=0)/N
 			for k in range(N):
-				vdot=np.sum(self.vval[whichframe,useparts[k],:]*self.vval[whichframe,useparts,:],axis=1)
+				if removeMean:
+					vdot=np.sum((self.vval[whichframe,useparts[k],:]-velav)*(self.vval[whichframe,useparts,:]-velav),axis=1)
+				else:
+					vdot=np.sum(self.vval[whichframe,useparts[k],:]*self.vval[whichframe,useparts,:],axis=1)
 				dr=self.geom.GeodesicDistance12(self.rval[whichframe,useparts[k],:],self.rval[whichframe,useparts,:])
 				drbin=(np.round(dr/dx)).astype(int)
 				for l in range(npts):
@@ -866,7 +881,7 @@ class Configuration:
 					velcount[l]+=len(pts)
 				
 		isdata=[index for index, value in enumerate(velcount) if value>0]
-		velcorr[isdata]=velcorr[isdata]/velcount[isdata] - np.sum(velav*velav)
+		velcorr[isdata]=velcorr[isdata]/velcount[isdata] #- np.sum(velav*velav) # Not necessarily the right way to remove the mean
 		if verbose:
 			fig=plt.figure()
 			isdata=[index for index, value in enumerate(velcount) if value>0]
@@ -875,6 +890,6 @@ class Configuration:
 			plt.xlabel("r-r'")
 			plt.ylabel('Correlation')
 			plt.title('Spatial velocity correlation')
-		return bins,velcorr
+		return bins,velcorr, velav
 
 	

@@ -78,6 +78,153 @@ class Dynamics(Configuration):
 		#def fromPython(self,param,rval,vval,nval,radius,ptype,flag,makeCellList=True,redobox=False):
 		averageChild = Configuration(initype="fromPython",param=self.param,rval=rval0,vval=vval0,nval=nval0,radii=radius0,ptype=ptype0,flag=flag0,makeCellList=True,redobox=False)
 		return averageChild
+
+	# Duplicated here from Topology - no reason why Dynamics should not be able to do this either
+	def getBirthDeath(self,inisnap,dsnap=1,debug=False):
+		flag1=list(self.flag[inisnap,:self.Nval[inisnap]].astype(int))
+		flag2=list(self.flag[inisnap+dsnap,:self.Nval[inisnap+dsnap]].astype(int))
+
+		# particles who have died first. Infer the death place as their last position
+		deaths=[]
+		runidx=0
+		for u in range(self.Nval[inisnap]):
+			# The particle existed in the first set. Run down the flag of the second set. Flags are in increasing order. I will either hit it or else the particle has died
+			flagi = flag1[u]
+			while flag2[runidx]<flagi:
+				runidx +=1
+			# Now it's either hit it or it's bigger. If it is bigger, the particle has died
+			if flag2[runidx]>flagi:
+				if debug:
+					print("Particle " + str(u) + " with flag " + str(flagi) + " has died.")
+				deaths.append(u)
+
+		deathpos = self.rval[inisnap,deaths]
+		deathflag = self.flag[inisnap,deaths].astype(int)
+
+		# Same thing in reverse for births:
+		# Well no: they are all at the end. Categorically true: Any higher labels are new cells
+		# Method: Check where the last particle in flag1 is in flag2. That's the starting  point of new cells
+		# if it's not there, it has died and therefore go backwards in flag1 until we find one that didn't die
+		found = False
+		startpt = self.Nval[inisnap]-1
+		while not found:
+			maxflag = int(flag1[startpt])
+			if debug:
+				print(maxflag)
+			try:
+				bornidx = flag2.index(maxflag)
+				found = True
+			except ValueError:
+				startpt = startpt-1
+
+		births = range((bornidx+1),self.Nval[inisnap+dsnap])
+
+
+		birthpos = self.rval[inisnap+dsnap,births]
+		birthflag = self.flag[inisnap+dsnap,births].astype(int)
+		if debug:
+			print(birthflag)
+
+		return birthflag, deathflag, birthpos, deathpos
+
+
+	def getFlowField(self,inisnap,dsnap=1,debug=False):
+		# attempt to compute the flow field between two snapshots, based on the uniquely labeled particles present in both
+		flag1=list(self.flag[inisnap,:self.Nval[inisnap]])
+		flag2=list(self.flag[inisnap+dsnap,:self.Nval[inisnap+dsnap]])
+
+		#index=[]
+		runidx=0
+		useparts1=[]
+		useparts2=[]
+		for u in range(self.Nval[inisnap]):
+			# The particle existed in the first set. Run down the flag of the second set. Flags are in increasing order. I will either hit it or else the particle has died
+			flagi = flag1[u]
+			while flag2[runidx]<flagi:
+				runidx +=1
+			# Now it's either hit it or it's bigger. If it has hit it, keep it for the flow field
+			if flag2[runidx] == flagi:
+				#index.append(flagi)
+				useparts1.append(u)
+				useparts2.append(runidx)
+		if debug:
+			print("Computed useparts1 and 2")
+
+		# Make this the actual displacement field
+		# .. and don't forget periodic boundary conditions ...
+		Deltat = dsnap*self.param.dt*self.param.dump['freq']
+		flowField = self.geom.ApplyPeriodic2d((self.rval[inisnap+dsnap,useparts2,:]-self.rval[inisnap,useparts1,:]))/Deltat
+
+		# also generate a polarisation field that is averaged over the snaps in between
+		nsnap = dsnap+1
+		polarField = self.nval[inisnap,useparts1,:]/nsnap
+
+
+		for u in range(1,nsnap):
+			if debug:
+				print('Starting polar director averaging snapshop',u)
+			flag3=list(self.flag[inisnap+u,:self.Nval[inisnap+u]])
+			#index=[]
+			runidx=0
+			runidx3=0
+			#useparts1=[]
+			useparts2=[]
+			for v in range(self.Nval[inisnap]):
+				# The particle existed in the first set. Run down the flag of the second set. Flags are in increasing order. I will either hit it or else the particle has died
+				flagi = flag1[v]
+				# advance the final particle index counter
+				while flag2[runidx]<flagi:
+					runidx +=1
+				# advance the current snapshot particle index counter
+				while flag3[runidx3]<flagi:
+					runidx3 +=1
+				# Now it's either hit it or it's bigger. If it has hit it, keep it for the flow field
+				# But for this version, append the index of the middle snaphshot
+				# If the particle has died by the final frame, runidx2 will just be thrown away
+				if flag2[runidx] == flagi:
+					useparts2.append(runidx3)
+
+			polarField = polarField +  self.nval[inisnap+u,useparts2,:]/nsnap
+
+		# need to normalise again for tracking
+		nnorm = np.sqrt(polarField[:,0]**2 + polarField[:,1]**2+polarField[:,2]**2)
+		polarField = polarField / np.outer(nnorm,np.ones((3,)))
+
+
+		if debug:
+			plt.figure(figsize=(8,8))
+			velangle = np.arctan2(flowField[:,1],flowField[:,0])
+			#arctan2 gives results between -pi to pi, normalise ...
+			colors = (velangle+np.pi)/(2*np.pi)
+			colormap = cm.hsv
+			plt.quiver(self.rval[inisnap,useparts1,0],self.rval[inisnap,useparts1,1],flowField[:,0],flowField[:,1],color=0.8*colormap(colors))
+			plt.gca().set_aspect('equal')
+			plt.title('Skipping ' + str(dsnap))
+
+			plt.figure(figsize=(8,8))
+			velangle = np.arctan2(self.vval[inisnap,:,1],self.vval[inisnap,:,0])
+			#arctan2 gives results between -pi to pi, normalise ...
+			colors = (velangle+np.pi)/(2*np.pi)
+			colormap = cm.hsv
+			plt.quiver(self.rval[inisnap,:,0],self.rval[inisnap,:,1],self.vval[inisnap,:,0],self.vval[inisnap,:,1],color=0.8*colormap(colors))
+			plt.gca().set_aspect('equal')
+			plt.title('Instantaneous velocity field')
+
+		return useparts1, flowField, polarField
+
+	def makeFlowChild(self,frame,useparts,FlowField,PolarField,makeCellList=True):
+		# To handle this, generate a child configuration with the flow field as velocities.
+		# FIX: Copy parameters, currently. Go down a level of complexity later
+		param0 = self.param
+		# Take out the persistent particles of frame frame for which the flow field is defined
+		rval0 = self.rval[frame,useparts,:]
+		radius0 = self.radius[frame,useparts]
+		ptype0 = self.ptype[frame,useparts]
+		flag0 = self.flag[frame,useparts]
+
+		# Generate child configuration (not through makeChild because we use flowField as velocities)
+		flowChild = Configuration(initype="fromPython",param=param0,rval=rval0,vval=FlowField,nval=PolarField,radii=radius0,ptype=ptype0,flag=flag0,makeCellList=makeCellList,redobox=True)
+		return flowChild
 		
 	# Tracking a subset of particles: This identifies the relevant ones
 	# and gives an error if that number changes or the flags don't match
