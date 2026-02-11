@@ -114,7 +114,7 @@ data['maxedge']=maxedge
 # Reduce for smaller corneas, make it proportionally 20% away from the edge
 # R=400: down to 80
 # R=300: down to 60
-dboundary = 60.0/Cornea.geom.R
+dboundary = 80.0/Cornea.geom.R
 print(dboundary)
 maxangle = args.coneangle/360.0*2*np.pi - dboundary
 print('Going out to maximum angle ' + str(maxangle) + ' in degrees ' + str(maxangle/(2*np.pi)*360))

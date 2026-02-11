@@ -80,7 +80,7 @@ class Hessian:
 			diagsquare=np.zeros((2,2))
 			for j0 in range(len(neighbours)):
 				# actual label of particle
-				jdx = neighbours[j0]
+				jdx = neighbours[j0]# based on cylinder or disk geometry
 				tpi = int(self.conf.ptype[idx])-1
 				tpj = int(self.conf.ptype[jdx])-1
 				kij = pairstiff[tpi][tpj]
@@ -125,9 +125,9 @@ class Hessian:
 		# Eigenvalues and eigenvectors
 		# Only symmetrise to calculate - for clarity and debugging above
 		HessianSym=0.5*(self.Hessian+np.transpose(self.Hessian))
-		if self.debug:
-			plt.figure()
-			plt.pcolor(HessianSym)
+		# if self.debug:
+		# 	plt.figure()
+		# 	plt.pcolor(HessianSym)
 		# Use routines for hermitian eigenvector decomposition
 		# Default is ascending order, which suits us
 		print("Starting Diagonalisation!")

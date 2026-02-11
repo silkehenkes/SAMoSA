@@ -945,7 +945,7 @@ class Dynamics(Configuration):
 
 		
 		plt.figure()
-		plt.semilogy(omega,self.proj2av/np.sum(self.proj2av),'.r',label='displacements')
+		plt.semilogy(omega,self.proj2av,'.r',label='displacements')
 		plt.xlabel(r'$\omega$')
 		plt.ylabel('projection square')
 		#plt.xlim(-0.01,12)
@@ -953,7 +953,7 @@ class Dynamics(Configuration):
 		plt.title('Square projections (normalised)')
 		
 		plt.figure()
-		plt.semilogy(omega,self.projv2av/np.sum(self.projv2av),'.g',label='velocities')
+		plt.semilogy(omega,self.projv2av,'.g',label='velocities')
 		plt.xlabel(r'$\omega$')
 		plt.ylabel('projection square')
 		#plt.xlim(-0.01,12)
@@ -990,10 +990,8 @@ class Dynamics(Configuration):
 				self.projv[:,u]=1.0*(np.einsum('i,ij->j',dv[Hessian.Huseparts,0],Hessian.eigvec[0:2*Hessian.NHessian:2,:]) + np.einsum('i,ij->j',dv[Hessian.Huseparts,1],Hessian.eigvec[1:2*Hessian.NHessian:2,:]))
 
 			# projection normalization
-			self.proj/=self.Nsnap
-			self.projv/=self.Nsnap
-			self.proj2av=np.sum(self.proj**2,axis=1)
-			self.projv2av=np.sum(self.projv**2,axis=1)
+			self.proj2av=np.sum(self.proj**2,axis=1)/self.Nsnap
+			self.projv2av=np.sum(self.projv**2,axis=1)/self.Nsnap
 
 		return self.proj,self.projv,self.proj2av,self.projv2av
 
