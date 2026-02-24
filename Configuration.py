@@ -7,6 +7,7 @@ from read_data_csv import *
 from CellList import *
 
 import sys,glob
+import h5py as h5
 
 
 try:
@@ -29,6 +30,8 @@ class Configuration:
 		self.initype = kwargs["initype"]
 		if self.initype == "fromCSV":
 			self.fromCSV(kwargs["param"],kwargs["datapath"],kwargs["multiopt"])
+		if self.initype == "fromJAMsHDF5":
+			self.fromJAMsHDF5(kwargs["param"],kwargs["datapath"],kwargs["multiopt"])
 		elif self.initype == "makeChild":
 			self.makeChild(kwargs["parentconf"],kwargs["frame"],kwargs["usetype"],kwargs["makeCellList"],kwargs["redobox"])
 		elif self.initype == "fromPython":
@@ -36,8 +39,30 @@ class Configuration:
 		else:
 			print("Configuration:Unknown configuration constructor option, stopping!")
 			sys.exit()
+		
 			
-			
+    # Use methods for the actual initialisation
+	def fromJAMsHDF5(self,param,datapath,multiopt,ignore=True,debug=False):
+		self.debug = debug
+		self.param = param
+		self.datapath = datapath
+		print(self.datapath)
+		self.multiopt = multiopt
+		self.ignore = True
+		# Options for running mode the analysis
+		if self.multiopt == "single":
+			print("Currently not configured")
+			sys.exit()
+		elif self.multiopt == "many":
+			print("Configuring to work on many files")
+		else:
+			print("Unknown file mode configuration option, stopping!")
+			sys.exit()
+		# Create the right geometry environment:
+		print(param.constraint)
+		self.geom=geometries[self.param.constraint](self.param)
+		print(self.geom)
+		
 	# Use methods for the actual initialisation
 	def fromCSV(self,param,datapath,multiopt,ignore=True,debug=False):
 		self.debug = debug
@@ -281,12 +306,83 @@ class Configuration:
 				ax = fig.add_subplot(111, projection='3d')
 				ax.scatter(self.rval[:,0], self.rval[:,1], self.rval[:,2], zdir='z', c='b')
 		
+	# Julia read in - easiest done straight there.
+	# Note: Keep developing for further read in options (skip transients etc)
+	def readDataManyJAMsHDF5(self,filename0="raw_data.h5"): #skip=0,step=1,howmany='all',Nvariable=False,readtypes = 'all'):
+		self.Nvariable=False
+		filename = self.datapath + filename0
+		rdata = h5.File(filename, 'r')
+		
+        # Get data out of all of this in pieces.
+		self.Nsnap = len(rdata['frames'].keys())
+		self.N = len(rdata['frames']['1']['x'])
+		self.Nval=[self.N for i in range(self.Nsnap)]
+
+		self.rval=np.zeros((self.Nsnap,self.N,3))
+		self.vval=np.zeros((self.Nsnap,self.N,3))
+		self.nval=np.zeros((self.Nsnap,self.N,3))
+		self.flag=np.zeros((self.Nsnap,self.N))
+		self.radius=np.zeros((self.Nsnap,self.N))
+		self.ptype=np.zeros((self.Nsnap,self.N),dtype='int')
 	
+		frame_numbers = np.arange(1,self.Nsnap+1)
+		print(frame_numbers)
+	
+		self.sigma=0.0
+		for i, frame_int in enumerate(frame_numbers):
+    
+			#As we can observe by printing the keys of raw_data['frames'] in order,
+			#the key does not match up with its order (i.e. i!=int(frame))
+			frame = str(frame_int)
+
+			#We correct for this by indexing the pre-allocated arrays with the actual frame key.
+			#Note that frame 1 should be at index 0.
+			self.rval[i,:,0] = rdata['frames'][frame]['x']
+			self.rval[i,:,1] = rdata['frames'][frame]['y']
+			try:
+				self.rval[i,:,2] = rdata['frames'][frame]['z']
+			except:
+				pass
+			self.vval[i,:,0] = rdata['frames'][frame]['vx']
+			self.vval[i,:,1] = rdata['frames'][frame]['vy']
+			try:
+				self.vval[i,:,2] = rdata['frames'][frame]['vz']
+			except:
+				pass
+			self.nval[i,:,0] = rdata['frames'][frame]['px']
+			self.nval[i,:,1] = rdata['frames'][frame]['py']
+			try:
+				self.nval[i,:,2] = rdata['frames'][frame]['pz']
+			except:
+				pass
+			self.radius[i,:] = rdata['frames'][frame]['R']
+			sigma0=np.max(rdata['frames'][frame]['R'])
+			if sigma0>self.sigma:
+				self.sigma=sigma0
+			self.ptype[i,:] = rdata['frames'][frame]['type']
+			self.flag[i,:] = rdata['frames'][frame]['id']
+
+		rdata.close()
+	
+		self.monodisperse=False
+		# Create the Interaction class
+		#__init__(self,param,sigma,ignore=False,debug=False):
+		self.inter=Interaction(self.param,self.sigma,self.ignore)
+			
+		# Apply periodic geomtry conditions just in case 
+		if self.geom.periodic:
+			self.rval=self.geom.ApplyPeriodic3d(self.rval)
+			
+        
+            
+		
+		
 	# read in data based on the content of the folder
 	# readtypes is now a list (when it is not 'all'): Read data of these types, which contains the tracer options
 	# tracers is type = [2], cornea is types = [1, 2] 
 	def readDataMany(self,dialect,skip=0,step=1,howmany='all',Nvariable=False,readtypes = 'all',filepattern='frame'):
 		self.Nvariable=Nvariable
+		
 		#try:
 		#	filepattern = self.param.dumpname
 		#except:
