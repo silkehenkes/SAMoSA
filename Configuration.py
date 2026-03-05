@@ -308,7 +308,7 @@ class Configuration:
 		
 	# Julia read in - easiest done straight there.
 	# Note: Keep developing for further read in options (skip transients etc)
-	def readDataManyJAMsHDF5(self,filename0="raw_data.h5",skip=0,step=1,howmany='all') #Nvariable=False,readtypes = 'all'):
+	def readDataManyJAMsHDF5(self,filename0="raw_data.h5",skip=0,step=1,howmany='all'): #Nvariable=False,readtypes = 'all'):
 		self.Nvariable=False
 		filename = self.datapath + filename0
 		rdata = h5.File(filename, 'r')
