@@ -329,7 +329,7 @@ class Configuration:
 		self.nval=np.zeros((self.Nsnap,self.N,3))
 		self.flag=np.zeros((self.Nsnap,self.N))
 		self.radius=np.zeros((self.Nsnap,self.N))
-		self.ptype=np.zeros((self.Nsnap,self.N),dtype='int')
+		self.ptype=np.ones((self.Nsnap,self.N),dtype='int')
 	
 		frame_numbers = np.arange(skip+1,self.Nsnap+1,step)
 		print(frame_numbers)
