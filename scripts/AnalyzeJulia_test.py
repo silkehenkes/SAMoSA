@@ -32,8 +32,8 @@ param.dt=0.01
 JuliaTest = Dynamics(initype="fromJAMsHDF5",param=param,datapath=args.directory,multiopt="many")
 
 # Now read in as desired
-# def readDataManyJAMsHDF5(self,filename0="raw_data.h5")
-JuliaTest.readDataManyJAMsHDF5()
+# def readDataManyJAMsHDF5(self,filename0="raw_data.h5",skip=0,step=1,howmany='all')
+JuliaTest.readDataManyJAMsHDF5("raw_data.h5",args.skip,args.step,args.howmany)
 JuliaTest.validate_initialise()
 # check
 JuliaTest.printDiagnostic()

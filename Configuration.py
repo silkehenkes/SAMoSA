@@ -308,13 +308,19 @@ class Configuration:
 		
 	# Julia read in - easiest done straight there.
 	# Note: Keep developing for further read in options (skip transients etc)
-	def readDataManyJAMsHDF5(self,filename0="raw_data.h5"): #skip=0,step=1,howmany='all',Nvariable=False,readtypes = 'all'):
+	def readDataManyJAMsHDF5(self,filename0="raw_data.h5",skip=0,step=1,howmany='all') #Nvariable=False,readtypes = 'all'):
 		self.Nvariable=False
 		filename = self.datapath + filename0
 		rdata = h5.File(filename, 'r')
 		
         # Get data out of all of this in pieces.
-		self.Nsnap = len(rdata['frames'].keys())
+		Nsnap0 = len(rdata['frames'].keys())
+		# Nsnap: Number of snapshots we are reading
+		if not howmany=='all':
+			self.Nsnap = howmany
+		else:
+			self.Nsnap = int((Nsnap0-skip)/step)
+
 		self.N = len(rdata['frames']['1']['x'])
 		self.Nval=[self.N for i in range(self.Nsnap)]
 
@@ -325,11 +331,11 @@ class Configuration:
 		self.radius=np.zeros((self.Nsnap,self.N))
 		self.ptype=np.zeros((self.Nsnap,self.N),dtype='int')
 	
-		frame_numbers = np.arange(1,self.Nsnap+1)
+		frame_numbers = np.arange(skip+1,self.Nsnap+1,step)
 		print(frame_numbers)
 	
 		self.sigma=0.0
-		for i, frame_int in enumerate(frame_numbers):
+		for i,frame_int in enumerate(frame_numbers):
     
 			#As we can observe by printing the keys of raw_data['frames'] in order,
 			#the key does not match up with its order (i.e. i!=int(frame))
