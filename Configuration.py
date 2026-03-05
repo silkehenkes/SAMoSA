@@ -331,7 +331,7 @@ class Configuration:
 		self.radius=np.zeros((self.Nsnap,self.N))
 		self.ptype=np.ones((self.Nsnap,self.N),dtype='int')
 	
-		frame_numbers = np.arange(skip+1,step*self.Nsnap-skip,step)
+		frame_numbers = np.arange(skip+1,step*self.Nsnap-skip+1,step)
 		print(frame_numbers)
 	
 		self.sigma=0.0
