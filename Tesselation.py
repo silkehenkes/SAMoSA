@@ -104,7 +104,7 @@ class Tesselation:
 				toaddx=list(set(nuggetx))
 				toaddy=list(set(nuggety))
 				
-				loops=np.zeros((len(tokeep)+len(toadd)+len(toaddx)+len(toaddy),3),dtype=np.int)
+				loops=np.zeros((len(tokeep)+len(toadd)+len(toaddx)+len(toaddy),3),dtype=int)
 				loops[:len(tokeep),:]=tri0.simplices[tokeep,:]
 				loops[len(tokeep):(len(tokeep)+len(toadd)),:]=trishift.simplices[toadd,:]
 				loops[(len(tokeep)+len(toadd)):(len(tokeep)+len(toadd)+len(toaddx)),:]=trishift_x.simplices[toaddx,:]

@@ -13,6 +13,8 @@ class Param:
 		self.box = list(rdata["system"]["sizes"][()])
 		self.lx=self.box[0]
 		self.ly=self.box[1]
+		# hack for now:
+		self.box[2] = 4
 		self.dt = rdata["integration_info"]["dt"][()]
 		self.ntypes=len(np.unique(rdata["frames"]["1"]["type"]))
 

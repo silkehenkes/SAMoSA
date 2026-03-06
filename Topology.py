@@ -169,7 +169,8 @@ class Topology(Configuration):
 		
 	def makeFrameChild(self,frame,makeCellList=True):
 		# first generate the appropriate child configuration for only that frame
-		frameChild = Configuration(initype="makeChild",parentconf=self,frame=frame,usetype="all",makeCellList=makeCellList,redobox=True)
+		# (kwargs["parentconf"],kwargs["frame"],kwargs["usetype"],kwargs["makeCellList"],kwargs["redobox"])
+		frameChild = Configuration(initype="makeChild",parentconf=self,frame=frame,usetype="all",makeCellList=makeCellList,redobox=False)
 		return frameChild
 	
 	
@@ -191,8 +192,8 @@ class Topology(Configuration):
 		# Removing bad loops. Adding a couple of criteria here.
 		# Remove by edge length as before, but spare it if it's close to the top (wounds or empty cornea)
 		# maxangle: 10 particle diameters in from the edge. Tesselation should be sensible at that point.
-		maxangle = coneangle - 20*child.sigma/child.geom.R
 		if nuke:
+			maxangle = coneangle - 20*child.sigma/child.geom.R
 			# def cleanLoops(self,maxedge=25,cornea=True,crit = 0.75,maxangle=68/360.0*2*np.pi):
 			tess.cleanLoops(maxedge=maxedge,cornea=True,crit = 0.75, maxangle = maxangle)
 		df = Defects(tess,child)
