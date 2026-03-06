@@ -13,9 +13,9 @@ from read_param_Julia import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--directory", type=str, default="/Users/silke/Documents/Coding/JAMs/for_SAMoSA/simdata/",help="input directory")
-parser.add_argument("-s", "--skip", type=int, default=0, help="skip this many samples")
-parser.add_argument("-m", "--howmany", type=int, default=200, help="read this many samples")
-parser.add_argument("-t", "--step", type=int, default=1, help="step snapshots with this spacing for long calculations")
+parser.add_argument("-s", "--skip", type=int, default=50, help="skip this many samples")
+parser.add_argument("-m", "--howmany", type=int, default=20, help="read this many samples")
+parser.add_argument("-t", "--step", type=int, default=2, help="step snapshots with this spacing for long calculations")
 parser.add_argument("-o", "--outfile", type=str, default="oscillations.p", help="pickle file name")
 parser.add_argument("--plotall", action='store_true', default=False, help="Plot results for each configuration")
 args = parser.parse_args()
