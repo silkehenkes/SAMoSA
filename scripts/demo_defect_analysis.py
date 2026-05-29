@@ -3,6 +3,7 @@ import sys
 import argparse
 import pickle
 
+
 sys.path.insert(1,'/data1/pabshettiwar/Simulation_Softwares/SAMOS_ABP/SAMoSA-master/')
 
 from Topology import *
@@ -31,7 +32,8 @@ Tumoroid.readDataMany("SAMoS",skip,step,howmany,False,readtypes = [1],filepatter
 for k in range(howmany):
     frameChild = Tumoroid.makeFrameChild(k,makeCellList=True)
     # def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False,nuke=True,maxedge=25, coneangle=70.0/360*2*np.pi):
-    defects_n, numdefect_n,tess = Tumoroid.getDefects(frameChild,'orientation','nematic',4.0,4,0.8,False,True,False)
+    #defects_n, numdefect_n,tess = Tumoroid.getDefects(frameChild,'orientation','nematic',4.0,4,0.8,False,True,False)
+    defects_n, numdefect_n,tess = Tumoroid.getDefects(frameChild,'orientation','nematic',0,4,0.8,False,True,False)
     if(k==1):
         print(defects_n, numdefect_n)
 

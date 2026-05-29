@@ -5,8 +5,8 @@ from numpy import linalg as LA
 
 try:
 	import matplotlib.pyplot as plt
-	from mpl_toolkits.mplot3d import Axes3D
-	import matplotlib.cm as cm
+	#from mpl_toolkits.mplot3d import Axes3D
+	#import matplotlib.cm as cm
 	HAS_MATPLOTLIB = True
 except:
 	HAS_MATPLOTLIB = False
@@ -178,9 +178,17 @@ class Topology(Configuration):
 	# use with frameChild to track defects in a particular frame
 	# use with flowChild and field = "velocity" and symtype = "polar" to track the flow field on the cornea
 	# Track the (polar) defects on a corneal flow field
-	def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False,nuke=True,maxedge=25, coneangle=70.0/360*2*np.pi):
-		
+	def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8, getOrient = False, closeHoles=True,delaunay=False,nuke=True,maxedge=25, coneangle=70.0/360*2*np.pi):
+		'''
+		Return:
+		--------------
+		if getOrient== True:
+		returns defects , numdefect, theta_orients, n_orients, tess
+		else:
+		returns defects, numdefect, tess    
+		'''
 		# Now generate tesselation and defects
+		
 		tess = Tesselation(child)
 		print("initialized tesselation")
 		if delaunay:
@@ -198,14 +206,31 @@ class Topology(Configuration):
 			tess.cleanLoops(maxedge=maxedge,cornea=True,crit = 0.75, maxangle = maxangle)
 		df = Defects(tess,child)
 		defects0,numdefect0=df.getDefects(symtype,field)
-		# Clean up and merge the resulting defects
+		# Clean up and merge the redf = Defects(tess,child)
 		if rmerge>0.0:
 			defects,numdefect = df.mergeDefects(defects0,numdefect0,rmerge)
 		else:
 			print("Not merging defects!")
 			defects = defects0
 			numdefect = numdefect0
+		
 		print("After merging field " + field + " with symtype " + symtype + " and rmerge radius " + str(rmerge) + " found " + str(numdefect) + " defects:")
+		
+		if(getOrient):
+
+			if(symtype=="polar"):
+				print("No defect orientation (for polar systems no defect orientations) so returning getDefect output")
+				return defects, numdefect, tess
+			
+			theta_orients = []
+			n_orients = []
+
+			for ii in range(numdefect):
+				theta_o, n_orient = df.getDefectOrient(defects[ii][0], defects[ii][1:4], rmerge, verbose=False)
+				theta_orients.append(theta_o)
+				n_orients.append(n_orient)
+			
+			return defects, numdefect, theta_orients, n_orients, tess
 		
 		# tesselation for writer ... less than elegant
 		return defects, numdefect, tess

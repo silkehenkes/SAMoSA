@@ -132,7 +132,7 @@ class Writer:
 		writer.SetCompressorTypeToZLib()
 		writer.Write()
 		
-	def writeDefects(self,defects, numdefect,outfile):
+	def writeDefects(self,defects, numdefect, n_orients):
 		# Preparing the vtp output
 		# Create point structure in vtk
 		Points = vtk.vtkPoints()
@@ -140,15 +140,22 @@ class Writer:
 		Charge = vtk.vtkDoubleArray()
 		Charge.SetNumberOfComponents(1)
 		Charge.SetName('Charge')
+		
+		Directors = vtk.vtkDoubleArray()
+		Directors.SetNumberOfComponents(3)
+		Directors.SetName("Defect_orient")
+		
 		for u in range(numdefect):
 			Points.InsertNextPoint(defects[u][1],defects[u][2],defects[u][3])
 			Charge.InsertNextValue(defects[u][0])
+			Directors.InsertNextTuple3(n_orients[u][0], n_orients[u][1], n_orients[u][2])
 		
 		
 		polydata = vtk.vtkPolyData()
 		polydata.SetPoints(Points)
 		#polydata.SetLines(lines)
 		polydata.GetPointData().AddArray(Charge)
+		polydata.GetPointData().AddArray(Directors)
 		
 		print("Finished Polydata")
 		polydata.Modified()
@@ -163,7 +170,7 @@ class Writer:
 		writer.SetDataModeToBinary()
 		writer.SetCompressorTypeToZLib()
 		writer.Write()
-		print("Wrote File")
+		print("Write File")
 		
 	def writePatches(self,tess,outname,computeDensity=False):
 		print(outname)

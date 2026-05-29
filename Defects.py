@@ -1,5 +1,5 @@
 
-
+import numpy as np
 from Configuration import *
 from Tesselation import *
 try:
@@ -216,7 +216,104 @@ class Defects:
 					self.ax.scatter(self.conf.rval[t,0], self.conf.rval[t,1], self.conf.rval[t,2],marker='o',s=50,color='g')
 		# Returning the charge of the thing, in the end
 		return charge
-            
+
+
+	def getDefectOrient(self, charge, pos_defect, rmerge, n_orientations=180, verbose=False):
+		"""
+			Estimate defect orientation by minimizing angular deviation.
+
+			charge : float
+				Defect charge (e.g. +1/2, -1/2)
+
+			pos_defect : array-like, shape (2,)
+				Defect position
+
+			pos_parts : ndarray, shape (N,2)
+				Particle positions
+
+			theta_parts : ndarray, shape (N,)
+				Particle orientations
+
+			rmerge : float
+				Cutoff radius
+
+			n_orientations : int
+				Number of angular slices for theta_0 
+
+			Returns:
+			theta_orient : float
+				Estimated defect orientation
+		"""
+		# if charge is not +- 1/2 this would return zero array to keep the outer loop(size) consistent
+		if(2*abs(charge)>1):
+			return 0.0, np.asarray([0,0,0])
+		
+		x_parts = self.theta
+		y_parts = self.phi
+		#ex_parts = self.etheta
+		#ey_parts = self.ephi
+
+		n_theta_parts = np.atan2(self.conf.nval[:,1],self.conf.nval[:,0])
+		
+		def_x, def_y, def_ex, def_ey  = self.conf.geom.TangentBundleSingle(pos_defect)
+		
+		dx = self.conf.geom.ApplyPeriodicX(x_parts - def_x)
+		dy = self.conf.geom.ApplyPeriodicX(y_parts - def_y)
+		
+		r2 = dx**2 + dy**2
+		
+		## Can be faster considering the cell lists too
+		mask = r2 <= rmerge**2
+
+		theta_parts_local = n_theta_parts[mask]
+		
+		dx_m = dx[mask]
+		dy_m = dy[mask]
+
+		base_field_local = np.arctan2(dy_m, dx_m)
+		
+		orientations = np.linspace(-np.pi / 2, np.pi / 2, n_orientations)
+
+		theta_field_local_all = charge*base_field_local[None, :] + orientations[:, None]
+
+		dtheta_field_all = theta_field_local_all - theta_parts_local[None,:]
+
+		chi_sq_orients = np.sum(np.sin(dtheta_field_all)**2, axis = 1)
+
+		theta_0 = orientations[np.argmin(chi_sq_orients)]
+		theta_orient = theta_0 / (1 - charge)
+		
+		n_theta = np.cos(theta_orient)*def_ex + np.sin(theta_orient)*def_ey
+
+		print("number of particles used:", len(theta_parts_local))
+		print("min chi_sq val:", np.min(chi_sq_orients))
+		print("theta_0:", theta_0)
+		print("theta_orient:", theta_orient)
+		
+		if(verbose):
+			
+			plt.figure(figsize = (10,10))
+			plt.plot(orientations, chi_sq_orients)   
+
+			plt.figure(figsize = (10,10))
+			plt.quiver(x_parts,y_parts, np.cos(n_theta_parts), np.sin(n_theta_parts), headlength=0, headwidth= 0,  pivot='middle',color = 'r',scale=5)
+			#theta_0_field = []
+			#for ii in range(len(pos_parts)):
+			#	theta_0_field.append(get_orient_field_loc(charge, pos_defect, pos_parts[ii], theta_0)) 
+			#theta_0_field = np.array(theta_0_field)
+			#print("shape_theta_0_field:",np.shape(theta_0_field))
+			#print(theta_orient)
+			plt.quiver(def_x, def_y, np.cos(theta_orient), np.sin(theta_orient))
+			#plt.quiver(x_parts, y_parts, np.cos(theta_0_field), np.sin(theta_0_field),  headlength=0, headwidth= 0,  pivot='middle', color= 'b', scale = 5)
+			plt.xlim(def_x - rmerge, def_x + rmerge)
+			plt.ylim(def_y - rmerge, def_y + rmerge)
+			plt.tight_layout()
+			plt.show()
+			#plt.savefig("test.png", dpi = 200, format='png')
+
+		return theta_orient, n_theta
+
+
 	# Following a version of the Goldenfeld algorithm, with nx,ny,nz as is playing the role of the order parameter. The sphere is in cartesian space
 	# The old nematic algorithm, based on the hemispheres            
 	def getDefectsGoldenfeld(self,thisLoop,field): 
