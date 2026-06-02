@@ -132,7 +132,7 @@ class Writer:
 		writer.SetCompressorTypeToZLib()
 		writer.Write()
 		
-	def writeDefects(self,defects, numdefect, n_orients):
+	def writeDefects(self,defects, numdefect, n_orients,outfile):
 		# Preparing the vtp output
 		# Create point structure in vtk
 		Points = vtk.vtkPoints()

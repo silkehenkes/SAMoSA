@@ -284,6 +284,22 @@ class GeometryPlane(Geometry):
 		ey[:,2]=1.0*np.zeros(len(rval))
 		return x,y,ex,ey
 	
+	def TangentBundleSingle(self,rval):
+		x=rval[0]
+		y=rval[1]
+
+		ex = np.empty(np.shape(rval))
+		ex[0]=1.0
+		ex[1]=0.0 
+		ex[2]=0.0
+
+		ey = np.empty(np.shape(rval))
+		ey[0]=0.0
+		ey[1]=1.0
+		ey[2]=0.0
+
+		return x,y,ex,ey
+	
 	# Unit normal: just the z direction
 	def UnitNormal(self,rval):
 		nvec=np.zeros(np.shape(rval))
@@ -321,6 +337,22 @@ class GeometryPeriodicPlane(Geometry):
 		ey[:,0]=1.0*np.zeros(len(rval))
 		ey[:,1]=1.0*np.ones(len(rval))
 		ey[:,2]=1.0*np.zeros(len(rval))
+		return x,y,ex,ey
+	
+	def TangentBundleSingle(self,rval):
+		x=rval[0]
+		y=rval[1]
+		
+		ex = np.empty(np.shape(rval))
+		ex[0]=1.0
+		ex[1]=0.0 
+		ex[2]=0.0
+
+		ey = np.empty(np.shape(rval))
+		ey[0]=0.0
+		ey[1]=1.0
+		ey[2]=0.0
+
 		return x,y,ex,ey
 	
 	# Unit normal: just the z direction

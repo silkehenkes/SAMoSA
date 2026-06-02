@@ -15,7 +15,7 @@ from read_param_Julia import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--directory", type=str, default="/Users/silke/Documents/Coding/JAMs/for_SAMoSA/simdata/",help="input directory")
-parser.add_argument("-s", "--skip", type=int, default=50, help="skip this many samples")
+parser.add_argument("-s", "--skip", type=int, default=0, help="skip this many samples")
 parser.add_argument("-m", "--howmany", type=int, default=20, help="read this many samples")
 parser.add_argument("-t", "--step", type=int, default=2, help="step snapshots with this spacing for long calculations")
 parser.add_argument("-o", "--outfile", type=str, default="oscillations.p", help="pickle file name")
@@ -35,7 +35,7 @@ JuliaTest = Topology(initype="fromJAMsHDF5",param=param,datapath=args.directory,
 
 # Now read in as desired
 # def readDataManyJAMsHDF5(self,filename0="raw_data.h5",skip=0,step=1,howmany='all')
-JuliaTest.readDataManyJAMsHDF5("raw_data.h5",args.skip,args.step,args.howmany)
+JuliaTest.readDataManyJAMsHDF5("raw_data.h5",args.skip,args.step,'all')
 #JuliaTest.validate_initialise()
 # check
 JuliaTest.printDiagnostic()
@@ -43,15 +43,15 @@ write = Writer()
 
 for k in range(args.howmany):
     frameChild = JuliaTest.makeFrameChild(k,makeCellList=True)
-    # def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8,closeHoles=True,delaunay=False,nuke=True,maxedge=25, coneangle=70.0/360*2*np.pi):
-    #defects_n, numdefect_n,tess = JuliaTest.getDefects(frameChild,'orientation','nematic',4.0,4,0.8,False,True,False)
+    # def getDefects(self,child,field,symtype,rmerge = 5, zmin = 4, mult = 0.8, getOrient = False, closeHoles=True,delaunay=False,nuke=True,maxedge=25, coneangle=70.0/360*2*np.pi):
     # no merging of defects (rmerge = 0)
-    defects_n, numdefect_n,tess = JuliaTest.getDefects(frameChild,'orientation','nematic',0,4,0.8,False,True,False)
+    defects_n, numdefect_n,theta_orients, n_orients,tess = JuliaTest.getDefects(frameChild,'orientation','nematic',5,4,0.8,True,False,True,False)
     if(k==1):
-        print(defects_n, numdefect_n)
+        print(defects_n, numdefect_n,theta_orients, n_orients,)
 
     tess.OrderPatches()
     write.writeConfigurationVTK(frameChild,'test_' +str(k) +'.vtp')
     write.writePatches(tess,'test_patches_'+str(k)+'.vtp')
-    write.writeDefects(defects_n, numdefect_n,'test_polarisationdefects' +str(k) + '.vtp')
+    # def writeDefects(self,defects, numdefect, n_orients, outfile):
+    write.writeDefects(defects_n, numdefect_n,n_orients,'test_polarisationdefects' +str(k) + '.vtp')
 
