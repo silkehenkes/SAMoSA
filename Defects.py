@@ -283,6 +283,10 @@ class Defects:
 		theta_0 = orientations[np.argmin(chi_sq_orients)]
 		theta_orient = theta_0 / (1 - charge)
 		
+		if(charge==0.5):
+		    theta_orient += np.pi
+		    theta_orient %= 2*np.pi
+		
 		n_theta = np.cos(theta_orient)*def_ex + np.sin(theta_orient)*def_ey
 
 		print("number of particles used:", len(theta_parts_local))
